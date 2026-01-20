@@ -4,22 +4,45 @@
 //
 //  Created by 山本敬之 on 2026/01/20.
 //
-
 import SwiftUI
 import Photos
 
 struct ContentView: View {
-    @State private var showPicker = false
-    @State private var showDeniedAlert = false
+    @StateObject private var vm = VideoLibraryViewModel()
+
+    // グリッドの見た目
+    private let columns = [
+        GridItem(.adaptive(minimum: 110), spacing: 8)
+    ]
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 16) {}
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                // ====== 赤枠の中身（一覧エリア） ======
+                VStack {
+                    if vm.items.isEmpty {
+                        Text(emptyMessage)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 8) {
+                                ForEach(vm.items) { item in
+                                    VideoThumbnailCell(item: item) { asset, size in
+                                        await vm.thumbnail(for: asset, targetSize: size)
+                                    }
+                                }
+                            }
+                            .padding(12)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // ====== 右下ボタン ======
                 Button {
-                    requestPhotoLibrary()
+                    vm.requestAccessAndLoadVideos()
                 } label: {
                     Image(systemName: "video.fill")
                         .font(.system(size: 20, weight: .semibold))
@@ -29,59 +52,36 @@ struct ContentView: View {
                         .shadow(radius: 6)
                         .padding(20)
                 }
-                .accessibilityLabel("動画選択へ")
+                .accessibilityLabel("動画一覧を読み込む")
             }
             .navigationTitle("VideoPicker")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(isPresented: $showPicker) {
-                Text("ここに VideoPicker を置く")
-            }
-            .alert("写真へのアクセスが必要です", isPresented: $showDeniedAlert) {
-                Button("設定を開く") {
-                    openAppSettings()
-                }
+            .alert("写真へのアクセスが必要です", isPresented: $vm.showDeniedAlert) {
+                Button("設定を開く") { openAppSettings() }
                 Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("動画一覧を表示するには写真ライブラリへのアクセスを許可してください。")
             }
-        }
-    }
-
-    private func requestPhotoLibrary() {
-        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-
-        switch status {
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
-                DispatchQueue.main.async {
-                    handleStatus(newStatus)
+            .onAppear {
+                // 起動時に許可済みなら即ロードしても良い
+                let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+                if status == .authorized || status == .limited {
+                    vm.requestAccessAndLoadVideos()
                 }
             }
-
-        case .authorized, .limited:
-            showPicker = true
-
-        case .denied:
-            // ここではもうOSの許可ダイアログは出ない（仕様）
-            showDeniedAlert = true
-
-        case .restricted:
-            // 端末制限。設定へ誘導しても変えられない場合がある
-            showDeniedAlert = true
-
-        @unknown default:
-            showDeniedAlert = true
         }
     }
 
-    private func handleStatus(_ status: PHAuthorizationStatus) {
-        switch status {
+    private var emptyMessage: String {
+        switch vm.authorization {
         case .authorized, .limited:
-            showPicker = true
+            return "動画が見つかりませんでした"
         case .denied, .restricted:
-            showDeniedAlert = true
-        default:
-            break
+            return "右下ボタン → 設定から写真アクセスを許可してください"
+        case .notDetermined:
+            return "右下ボタンで写真アクセスを許可すると動画一覧を表示します"
+        @unknown default:
+            return "状態不明"
         }
     }
 
