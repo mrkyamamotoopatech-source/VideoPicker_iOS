@@ -19,7 +19,7 @@ struct ContentView: View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
 
-                // ====== 赤枠の中身（一覧エリア） ======
+                // ====== 一覧エリア ======
                 VStack {
                     if vm.items.isEmpty {
                         Text(emptyMessage)
@@ -64,10 +64,10 @@ struct ContentView: View {
             }
             .onAppear {
                 // 起動時に許可済みなら即ロードしても良い
-                let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
-                if status == .authorized || status == .limited {
-                    vm.requestAccessAndLoadVideos()
-                }
+//                let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+//                if status == .authorized || status == .limited {
+//                    vm.requestAccessAndLoadVideos()
+//                }
             }
         }
     }
@@ -75,7 +75,7 @@ struct ContentView: View {
     private var emptyMessage: String {
         switch vm.authorization {
         case .authorized, .limited:
-            return "動画が見つかりませんでした"
+            return "右下ボタン → 使用する写真を選択してください"
         case .denied, .restricted:
             return "右下ボタン → 設定から写真アクセスを許可してください"
         case .notDetermined:
