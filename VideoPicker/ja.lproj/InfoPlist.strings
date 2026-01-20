@@ -1,0 +1,9 @@
+/* 
+  InfoPlist.strings
+  VideoPicker
+
+  Created by 山本敬之 on 2026/01/20.
+  
+*/
+
+"NSPhotoLibraryUsageDescription" = "動画を一覧表示するために写真ライブラリへアクセスします。";

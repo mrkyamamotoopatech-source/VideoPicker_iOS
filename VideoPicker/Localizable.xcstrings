@@ -1,0 +1,44 @@
+{
+  "sourceLanguage" : "ja",
+  "strings" : {
+    "photo_library_usage_description" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We need access to your photo library to list videos."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "動画を一覧表示するために写真ライブラリへアクセスします。"
+          }
+        }
+      }
+    },
+    "VideoPicker" : {
+
+    },
+    "キャンセル" : {
+
+    },
+    "ここに VideoPicker を置く" : {
+
+    },
+    "写真へのアクセスが必要です" : {
+
+    },
+    "動画一覧を表示するには写真ライブラリへのアクセスを許可してください。" : {
+
+    },
+    "動画選択へ" : {
+
+    },
+    "設定を開く" : {
+
+    }
+  },
+  "version" : "1.0"
+}
