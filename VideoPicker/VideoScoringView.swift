@@ -100,6 +100,7 @@ struct VideoScoringView: View {
                     Toggle("", isOn: $isPersonScoring)
                         .labelsHidden()
                 }
+                .padding(.trailing, 4)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("採点モード")
                 .accessibilityValue(isPersonScoring ? "人物" : "景色")
