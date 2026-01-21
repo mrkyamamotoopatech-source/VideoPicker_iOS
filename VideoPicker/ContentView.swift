@@ -9,6 +9,9 @@ import Photos
 
 struct ContentView: View {
     @StateObject private var vm = VideoLibraryViewModel()
+    @State private var navigationPath = NavigationPath()
+    @State private var pendingItem: VideoItem?
+    @State private var showsSelectionDialog = false
 
     // グリッドの見た目
     private let columns = [
@@ -16,7 +19,7 @@ struct ContentView: View {
     ]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack(alignment: .bottomTrailing) {
 
                 // ====== 一覧エリア ======
@@ -29,8 +32,9 @@ struct ContentView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 8) {
                                 ForEach(vm.items) { item in
-                                    NavigationLink {
-                                        VideoDetailView(item: item)
+                                    Button {
+                                        pendingItem = item
+                                        showsSelectionDialog = true
                                     } label: {
                                         VideoThumbnailCell(item: item) { asset, size in
                                             await vm.thumbnail(for: asset, targetSize: size)
@@ -61,11 +65,33 @@ struct ContentView: View {
             }
             .navigationTitle("VideoPicker")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: VideoRoute.self) { route in
+                switch route {
+                case .detail(let item):
+                    VideoDetailView(item: item)
+                case .scoring(let item):
+                    VideoScoringView(item: item)
+                }
+            }
             .alert("写真へのアクセスが必要です", isPresented: $vm.showDeniedAlert) {
                 Button("設定を開く") { openAppSettings() }
                 Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("動画一覧を表示するには写真ライブラリへのアクセスを許可してください。")
+            }
+            .alert("確認", isPresented: $showsSelectionDialog) {
+                Button("いいえ", role: .cancel) {
+                    guard let item = pendingItem else { return }
+                    navigationPath.append(VideoRoute.detail(item))
+                    pendingItem = nil
+                }
+                Button("はい") {
+                    guard let item = pendingItem else { return }
+                    navigationPath.append(VideoRoute.scoring(item))
+                    pendingItem = nil
+                }
+            } message: {
+                Text("自動で写りの良い写真をピックアップしますか？")
             }
             .onAppear {
                 // 起動時に許可済みなら即ロードしても良い
@@ -94,4 +120,9 @@ struct ContentView: View {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
     }
+}
+
+private enum VideoRoute: Hashable {
+    case detail(VideoItem)
+    case scoring(VideoItem)
 }
