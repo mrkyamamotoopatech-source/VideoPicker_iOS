@@ -131,11 +131,16 @@ struct FrameDetailView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
 
             HStack {
-                Button("戻る") {
-                    selection = max(selection - 1, 0)
-                }
-                .buttonStyle(.bordered)
-                .disabled(selection == 0)
+                FrameControlButton(
+                    control: FrameControlAction(
+                        id: "back1f",
+                        label: "1f",
+                        systemImage: "backward.frame.fill"
+                    ) {
+                        selection = max(selection - 1, 0)
+                    },
+                    isEnabled: selection > 0
+                )
 
                 Spacer()
 
@@ -156,11 +161,16 @@ struct FrameDetailView: View {
 
                 Spacer()
 
-                Button("進む") {
-                    selection = min(selection + 1, frames.count - 1)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(selection == frames.count - 1)
+                FrameControlButton(
+                    control: FrameControlAction(
+                        id: "forward1f",
+                        label: "1f",
+                        systemImage: "forward.frame.fill"
+                    ) {
+                        selection = min(selection + 1, frames.count - 1)
+                    },
+                    isEnabled: selection < frames.count - 1
+                )
             }
             .padding(16)
             .background(Color(uiColor: .secondarySystemBackground))
@@ -237,6 +247,35 @@ struct FrameDetailView: View {
                 }
             }
         }
+    }
+}
+
+private struct FrameControlAction {
+    let id: String
+    let label: String
+    let systemImage: String
+    let action: () -> Void
+}
+
+private struct FrameControlButton: View {
+    let control: FrameControlAction
+    let isEnabled: Bool
+
+    var body: some View {
+        Button(action: control.action) {
+            VStack(spacing: 4) {
+                Image(systemName: control.systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                Text(control.label)
+                    .font(.caption2)
+            }
+            .frame(width: 48, height: 48)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.4)
+        .accessibilityIdentifier(control.id)
     }
 }
 
