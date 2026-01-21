@@ -104,7 +104,7 @@ struct VideoScoringView: View {
                 isPersonScoring.toggle()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "person.2.fill")
+                    Image(systemName: isPersonScoring ? "person.2.fill" : "leaf.fill")
                         .font(.headline.weight(.bold))
                     Text(isPersonScoring ? "人物" : "景色")
                         .font(.footnote.weight(.semibold))
