@@ -305,7 +305,7 @@ final class VideoScoringViewModel: ObservableObject {
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
             if let image = try? await generateImage(with: generator, at: time) {
-                let score = weightedScore ?? (70 + Int(abs(sin(Double(index))) * 30))
+                let score = score(for: image, weightedScore: weightedScore)
                 let frame = ScoredFrame(image: image, time: time, score: score)
                 if frame.score >= 75 {
                     scoredFrames.append(frame)
@@ -332,6 +332,77 @@ final class VideoScoringViewModel: ObservableObject {
             }
         }
         return UIImage(cgImage: cgImage)
+    }
+
+    private func score(for image: UIImage, weightedScore: Int?) -> Int {
+        let frameScore = fallbackScore(for: image)
+        guard let weightedScore else { return frameScore }
+        let blended = (Double(weightedScore) * 0.7 + Double(frameScore) * 0.3).rounded()
+        return min(100, max(0, Int(blended)))
+    }
+
+    private func fallbackScore(for image: UIImage) -> Int {
+        guard let cgImage = image.cgImage else { return 0 }
+        let targetSize = 32
+        let bytesPerPixel = 4
+        let bytesPerRow = targetSize * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: targetSize * targetSize * bytesPerPixel)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: &pixels,
+            width: targetSize,
+            height: targetSize,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 0
+        }
+        context.interpolationQuality = .low
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+
+        var luminance = [Double](repeating: 0, count: targetSize * targetSize)
+        var sum = Double(0)
+        var sumSquares = Double(0)
+        for index in 0..<targetSize * targetSize {
+            let offset = index * bytesPerPixel
+            let red = Double(pixels[offset]) / 255.0
+            let green = Double(pixels[offset + 1]) / 255.0
+            let blue = Double(pixels[offset + 2]) / 255.0
+            let value = red * 0.2126 + green * 0.7152 + blue * 0.0722
+            luminance[index] = value
+            sum += value
+            sumSquares += value * value
+        }
+
+        let count = Double(luminance.count)
+        let average = sum / count
+        let variance = max(0, (sumSquares / count) - (average * average))
+        let contrast = min(variance / 0.05, 1)
+
+        var edgeSum = Double(0)
+        var edgeCount = Double(0)
+        for y in 0..<targetSize {
+            for x in 0..<targetSize {
+                let index = y * targetSize + x
+                let current = luminance[index]
+                if x + 1 < targetSize {
+                    edgeSum += abs(current - luminance[index + 1])
+                    edgeCount += 1
+                }
+                if y + 1 < targetSize {
+                    edgeSum += abs(current - luminance[index + targetSize])
+                    edgeCount += 1
+                }
+            }
+        }
+        let edgeAverage = edgeCount > 0 ? edgeSum / edgeCount : 0
+        let edge = min(edgeAverage / 0.2, 1)
+
+        let quality = (0.3 * average) + (0.4 * contrast) + (0.3 * edge)
+        let score = 55 + Int((quality * 45).rounded())
+        return min(100, max(0, score))
     }
 
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
