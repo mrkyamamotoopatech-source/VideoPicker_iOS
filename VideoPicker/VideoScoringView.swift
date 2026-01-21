@@ -65,7 +65,11 @@ struct VideoScoringView: View {
                                 .background(Color.black.opacity(0.05))
                                 .overlay(alignment: .topLeading) {
                                     if frame.score == viewModel.highestScore {
-                                        BestBadge()
+                                        Image(systemName: "star.fill")
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(.yellow)
+                                            .padding(6)
+                                            .background(Circle().fill(Color.black.opacity(0.65)))
                                             .padding(6)
                                     }
                                 }
@@ -323,40 +327,6 @@ final class VideoScoringViewModel: ObservableObject {
             }
         }
         return UIImage(cgImage: cgImage)
-    }
-}
-
-private struct BestBadge: View {
-    var body: some View {
-        ZStack {
-            TagShape(notchRatio: 0.3)
-                .fill(Color.red)
-
-            Text("BEST")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 2)
-        }
-        .fixedSize()
-        .rotationEffect(.degrees(-45))
-    }
-}
-
-private struct TagShape: Shape {
-    let notchRatio: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let notchDepth = min(rect.width * notchRatio, rect.width * 0.5)
-        let notchMid = rect.midY
-        return Path { path in
-            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX - notchDepth, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: notchMid))
-            path.addLine(to: CGPoint(x: rect.maxX - notchDepth, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-            path.closeSubpath()
-        }
     }
 }
 
