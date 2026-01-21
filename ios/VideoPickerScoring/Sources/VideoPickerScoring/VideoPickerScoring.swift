@@ -37,7 +37,7 @@ public final class VideoPickerScoring {
         let code = url.path.withCString { path in
             vp_analyze_video_file(analyzer, path, &result)
         }
-        if code != VpErrorCode.VP_OK.rawValue {
+        if code != 0 {
             throw VideoPickerScoringError.analyzeFailed(code: code)
         }
         let meanItems = withUnsafePointer(to: &result.mean) { pointer in
