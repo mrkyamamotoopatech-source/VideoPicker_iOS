@@ -14,6 +14,7 @@ struct VideoDetailView: View {
     let item: VideoItem
 
     @StateObject private var viewModel: VideoDetailViewModel
+    @State private var showsSaveToast = false
 
     init(item: VideoItem) {
         self.item = item
@@ -31,6 +32,7 @@ struct VideoDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(uiColor: .systemBackground))
+            .overlay(saveToastOverlay, alignment: .bottom)
         }
         .navigationTitle("動画詳細")
         .navigationBarTitleDisplayMode(.inline)
@@ -55,16 +57,16 @@ struct VideoDetailView: View {
     }
 
     private var controlsArea: some View {
-        HStack {
-            HStack(spacing: 18) {
-                ForEach(leftControls, id: \.id) { control in
-                    ControlButton(control: control)
+        VStack(spacing: 14) {
+            HStack {
+                HStack(spacing: 18) {
+                    ForEach(leftControls, id: \.id) { control in
+                        ControlButton(control: control)
+                    }
                 }
-            }
 
-            Spacer()
+                Spacer()
 
-            VStack(spacing: 10) {
                 Button {
                     viewModel.togglePlay()
                 } label: {
@@ -76,30 +78,61 @@ struct VideoDetailView: View {
                 .accessibilityLabel(viewModel.isPlaying ? "停止" : "再生")
                 .disabled(viewModel.player == nil)
 
-                Button {
-                    viewModel.saveCurrentFrame()
-                } label: {
-                    Label("保存", systemImage: "square.and.arrow.down")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 88, height: 32)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
-                }
-                .buttonStyle(.plain)
-                .disabled(viewModel.isPlaying || viewModel.player == nil)
-                .accessibilityLabel("フレームを保存")
-            }
+                Spacer()
 
-            Spacer()
-
-            HStack(spacing: 18) {
-                ForEach(rightControls, id: \.id) { control in
-                    ControlButton(control: control)
+                HStack(spacing: 18) {
+                    ForEach(rightControls, id: \.id) { control in
+                        ControlButton(control: control)
+                    }
                 }
             }
+
+            Button {
+                Task {
+                    if await viewModel.saveCurrentFrame() {
+                        await showSaveToast()
+                    }
+                }
+            } label: {
+                Label("保存", systemImage: "square.and.arrow.down")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 112, height: 34)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isPlaying || viewModel.player == nil)
+            .accessibilityLabel("フレームを保存")
+            .padding(.top, 8)
         }
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .secondarySystemBackground))
+    }
+
+    private var saveToastOverlay: some View {
+        Group {
+            if showsSaveToast {
+                Text("保存しました")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.black.opacity(0.75)))
+                    .foregroundColor(.white)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showsSaveToast)
+    }
+
+    private func showSaveToast() async {
+        await MainActor.run {
+            showsSaveToast = true
+        }
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        await MainActor.run {
+            showsSaveToast = false
+        }
     }
 
     private var leftControls: [ControlAction] {
@@ -220,12 +253,10 @@ final class VideoDetailViewModel: ObservableObject {
         item.step(byCount: frames)
     }
 
-    func saveCurrentFrame() {
-        guard let player, let avAsset, !isPlaying else { return }
+    func saveCurrentFrame() async -> Bool {
+        guard let player, let avAsset, !isPlaying else { return false }
         let time = player.currentTime()
-        Task {
-            await saveFrame(at: time, from: avAsset)
-        }
+        return await saveFrame(at: time, from: avAsset)
     }
 
     private func observePlayer(_ player: AVPlayer) {
@@ -250,8 +281,8 @@ final class VideoDetailViewModel: ObservableObject {
         }
     }
 
-    private func saveFrame(at time: CMTime, from asset: AVAsset) async {
-        guard await requestPhotoLibraryAccess() else { return }
+    private func saveFrame(at time: CMTime, from asset: AVAsset) async -> Bool {
+        guard await requestPhotoLibraryAccess() else { return false }
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -271,8 +302,9 @@ final class VideoDetailViewModel: ObservableObject {
             }
             let uiImage = UIImage(cgImage: cgImage)
             try await saveImageToLibrary(uiImage)
+            return true
         } catch {
-            return
+            return false
         }
     }
 
