@@ -13,10 +13,12 @@ struct VideoThumbnailCell: View {
     let loadThumbnail: (PHAsset, CGSize) async -> UIImage?
 
     @State private var image: UIImage?
+    private let cornerRadius: CGFloat = 10
+    private let badgeSize: CGFloat = 44
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: .bottomTrailing) {
+            ZStack {
                 Group {
                     if let image {
                         Image(uiImage: image)
@@ -34,8 +36,15 @@ struct VideoThumbnailCell: View {
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
-                .cornerRadius(10)
-
+            }
+            .overlay(alignment: .topLeading) {
+                Image("best_badge")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: badgeSize)
+                    .padding(6)
+            }
+            .overlay(alignment: .bottomTrailing) {
                 Text(formatDuration(item.duration))
                     .font(.caption2)
                     .padding(.horizontal, 6)
@@ -45,6 +54,7 @@ struct VideoThumbnailCell: View {
                     .cornerRadius(6)
                     .padding(6)
             }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
         .aspectRatio(1, contentMode: .fit) // 正方形
     }
