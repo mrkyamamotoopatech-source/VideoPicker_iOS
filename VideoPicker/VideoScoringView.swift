@@ -17,6 +17,7 @@ struct VideoScoringView: View {
     let item: VideoItem
 
     @StateObject private var viewModel: VideoScoringViewModel
+    @State private var isPersonScoring = true
 
     init(item: VideoItem) {
         self.item = item
@@ -90,8 +91,27 @@ struct VideoScoringView: View {
         .background(Color(uiColor: .systemBackground))
         .navigationTitle("採点結果")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 6) {
+                    Text(isPersonScoring ? "人物" : "景色")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Toggle("", isOn: $isPersonScoring)
+                        .labelsHidden()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("採点モード")
+                .accessibilityValue(isPersonScoring ? "人物" : "景色")
+            }
+        }
         .task {
             await viewModel.startScoring()
+        }
+        .onChange(of: isPersonScoring) { _, newValue in
+            Task {
+                await viewModel.rescore(for: newValue ? .person : .scenery)
+            }
         }
     }
 }
@@ -256,6 +276,8 @@ final class VideoScoringViewModel: ObservableObject {
     @Published var isScoring = false
     @Published var scoredFrames: [ScoredFrame] = []
 
+    private(set) var scoringMode: ScoringMode = .person
+
     private let asset: PHAsset
     var highestScore: Int {
         scoredFrames.map(\.score).max() ?? 0
@@ -263,6 +285,14 @@ final class VideoScoringViewModel: ObservableObject {
 
     init(asset: PHAsset) {
         self.asset = asset
+    }
+
+    func rescore(for mode: ScoringMode) async {
+        guard mode != scoringMode else { return }
+        guard !isScoring else { return }
+        scoringMode = mode
+        scoredFrames = []
+        await startScoring()
     }
 
     func startScoring() async {
@@ -411,7 +441,7 @@ final class VideoScoringViewModel: ObservableObject {
         do {
             let scorer = try VideoPickerScoring()
             let result = try scorer.analyze(url: urlAsset.url)
-            return weightedScore(from: result.mean)
+            return weightedScore(from: result.mean, mode: scoringMode)
         } catch {
             return nil
         }
@@ -421,13 +451,24 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 #if canImport(VideoPickerScoring)
-    private func weightedScore(from items: [VideoQualityItem]) -> Int? {
-        let weights: [String: Float] = [
-            "sharpness": 0.20,
-            "motion_blur": 0.40,
-            "exposure": 0.30,
-            "noise": 0.10
-        ]
+    private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
+        let weights: [String: Float]
+        switch mode {
+        case .person:
+            weights = [
+                "sharpness": 0.15,
+                "motion_blur": 0.45,
+                "exposure": 0.30,
+                "noise": 0.10
+            ]
+        case .scenery:
+            weights = [
+                "sharpness": 0.35,
+                "motion_blur": 0.20,
+                "exposure": 0.30,
+                "noise": 0.15
+            ]
+        }
         let scores = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.score) })
         let requiredKeys = ["sharpness", "motion_blur", "exposure", "noise"]
         guard requiredKeys.allSatisfy({ scores[$0] != nil }) else { return nil }
@@ -439,6 +480,11 @@ final class VideoScoringViewModel: ObservableObject {
         return Int((total * 100).rounded())
     }
 #endif
+}
+
+enum ScoringMode {
+    case person
+    case scenery
 }
 
 private func formatTimestamp(_ time: CMTime) -> String {
