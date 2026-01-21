@@ -11,11 +11,6 @@ public struct VideoQualityAggregate {
     public let worst: [VideoQualityItem]
 }
 
-public enum VideoSceneMode: String {
-    case person
-    case landscape
-}
-
 public enum VideoPickerScoringError: Error {
     case createFailed
     case analyzeFailed(code: Int32)
@@ -65,9 +60,27 @@ public final class VideoPickerScoring {
         return VideoQualityAggregate(mean: meanItems, worst: worstItems)
     }
 
-    public func analyze(url: URL, mode: VideoSceneMode) throws -> VideoQualityAggregate {
-        _ = mode
-        return try analyze(url: url)
+    public static func weightedScore(for aggregate: VideoQualityAggregate) -> Float? {
+        let weights: [String: Float] = [
+            "sharpness": 0.25,
+            "exposure": 0.25,
+            "motion_blur": 0.2,
+            "noise": 0.15,
+            "person_blur": 0.15
+        ]
+        let scoreById = Dictionary(uniqueKeysWithValues: aggregate.mean.map { ($0.id, $0.score) })
+        var weightedSum: Float = 0.0
+        var weightSum: Float = 0.0
+        for (id, weight) in weights {
+            if let score = scoreById[id] {
+                weightedSum += score * weight
+                weightSum += weight
+            }
+        }
+        guard weightSum > 0 else {
+            return nil
+        }
+        return weightedSum / weightSum
     }
 
     public static func defaultConfig() -> VpConfig {

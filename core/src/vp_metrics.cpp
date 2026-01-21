@@ -189,6 +189,8 @@ const char* metric_id_to_string(VpMetricId id) {
       return "motion_blur";
     case VP_METRIC_NOISE:
       return "noise";
+    case VP_METRIC_PERSON_BLUR:
+      return "person_blur";
     default:
       return "unknown";
   }

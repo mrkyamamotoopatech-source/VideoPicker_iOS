@@ -4,18 +4,15 @@ import android.net.Uri
 import android.util.Log
 
 class VideoPickerScoringSample(private val scoring: VideoPickerScoring) {
-    fun analyzeFromUri(
-        uri: Uri,
-        context: android.content.Context,
-        mode: VideoPickerScoring.VideoSceneMode = VideoPickerScoring.VideoSceneMode.PERSON,
-    ) {
+    fun analyzeFromUri(uri: Uri, context: android.content.Context) {
         val tempFile = VideoPickerScoring.copyContentUriToFile(context, uri)
-        val result = scoring.analyzeVideo(tempFile.absolutePath, mode)
+        val result = scoring.analyzeVideo(tempFile.absolutePath)
         if (result == null) {
             Log.e("VideoPickerScoring", "Analyze failed")
             return
         }
-        Log.d("VideoPickerScoring", "mode=${mode.name.lowercase()}")
+        val weightedScore = scoring.weightedScore(result)
+        Log.d("VideoPickerScoring", "weightedScore=${weightedScore ?: "n/a"}")
         result.mean.forEach { item ->
             Log.d("VideoPickerScoring", "mean ${item.id} score=${item.score} raw=${item.raw}")
         }

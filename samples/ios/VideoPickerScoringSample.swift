@@ -2,17 +2,11 @@ import SwiftUI
 
 struct VideoPickerScoringSampleView: View {
     @State private var output: String = ""
-    @State private var selectedMode: VideoSceneMode = .person
 
     var body: some View {
         VStack(spacing: 16) {
             Text("VideoPicker Scoring")
                 .font(.headline)
-            Picker("Scene", selection: $selectedMode) {
-                Text("人物").tag(VideoSceneMode.person)
-                Text("景色").tag(VideoSceneMode.landscape)
-            }
-            .pickerStyle(.segmented)
             Button("Analyze Sample Video") {
                 analyzeSample()
             }
@@ -31,9 +25,13 @@ struct VideoPickerScoringSampleView: View {
         }
         do {
             let scorer = try VideoPickerScoring()
-            let result = try scorer.analyze(url: sampleURL, mode: selectedMode)
+            let result = try scorer.analyze(url: sampleURL)
             var lines: [String] = []
-            lines.append("Mode: \(selectedMode.rawValue)")
+            if let weightedScore = VideoPickerScoring.weightedScore(for: result) {
+                lines.append("WeightedScore: \(String(format: "%.3f", weightedScore))")
+            } else {
+                lines.append("WeightedScore: n/a")
+            }
             lines.append("Mean:")
             for item in result.mean {
                 lines.append("  \(item.id): score=\(String(format: "%.3f", item.score)) raw=\(String(format: "%.5f", item.raw))")

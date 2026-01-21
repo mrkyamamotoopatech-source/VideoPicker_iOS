@@ -23,7 +23,8 @@ typedef enum {
   VP_METRIC_SHARPNESS = 0,
   VP_METRIC_EXPOSURE = 1,
   VP_METRIC_MOTION_BLUR = 2,
-  VP_METRIC_NOISE = 3
+  VP_METRIC_NOISE = 3,
+  VP_METRIC_PERSON_BLUR = 4
 } VpMetricId;
 
 typedef struct {
