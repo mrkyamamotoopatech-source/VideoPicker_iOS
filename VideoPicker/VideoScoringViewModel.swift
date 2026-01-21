@@ -200,7 +200,28 @@ final class VideoScoringViewModel: ObservableObject {
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
             return score
         } catch {
-            if case let VideoPickerScoringError.analyzeFailed(code) = error {
+            if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5 {
+                NSLog(
+                    "VideoPickerScoring unsupported; attempting mp4 conversion. code=%d url=%@",
+                    code,
+                    urlAsset.url.path
+                )
+                if let convertedURL = await convertToMP4(urlAsset: urlAsset) {
+                    defer { try? FileManager.default.removeItem(at: convertedURL) }
+                    do {
+                        let scorer = try VideoPickerScoring()
+                        let result = try scorer.analyze(url: convertedURL)
+                        NSLog("VideoPickerScoring analyze succeeded after mp4 conversion: meanCount=%d", result.mean.count)
+                        let score = weightedScore(from: result.mean, mode: scoringMode)
+                        logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
+                        return score
+                    } catch {
+                        NSLog("VideoPickerScoring analyze failed after mp4 conversion: %@", "\(error)")
+                    }
+                } else {
+                    NSLog("VideoPickerScoring mp4 conversion failed; falling back to frame scoring.")
+                }
+            } else if case let VideoPickerScoringError.analyzeFailed(code) = error {
                 let message = videoPickerScoringErrorMessage(for: code)
                 NSLog(
                     "VideoPickerScoring analyze failed: code=%d (%@) url=%@",
@@ -270,6 +291,44 @@ final class VideoScoringViewModel: ObservableObject {
             return "unsupported video or codec"
         default:
             return "unknown error"
+        }
+    }
+
+    private func convertToMP4(urlAsset: AVURLAsset) async -> URL? {
+        guard let exportSession = AVAssetExportSession(
+            asset: urlAsset,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            return nil
+        }
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mp4")
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+        do {
+            try await withCheckedThrowingContinuation { continuation in
+                exportSession.exportAsynchronously {
+                    switch exportSession.status {
+                    case .completed:
+                        continuation.resume()
+                    case .failed:
+                        continuation.resume(throwing: exportSession.error ?? NSError(
+                            domain: "VideoPickerScoring",
+                            code: 1
+                        ))
+                    case .cancelled:
+                        continuation.resume(throwing: NSError(domain: "VideoPickerScoring", code: 2))
+                    default:
+                        continuation.resume(throwing: NSError(domain: "VideoPickerScoring", code: 3))
+                    }
+                }
+            }
+            return outputURL
+        } catch {
+            NSLog("VideoPickerScoring mp4 conversion error: %@", "\(error)")
+            return nil
         }
     }
 #endif
