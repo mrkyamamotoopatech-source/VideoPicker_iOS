@@ -7,5 +7,79 @@
 		<string>en</string>
 		<string>ja</string>
 	</array>
+	<key>VP_Accessibility_LoadVideos</key>
+	<string>Load video list</string>
+	<key>VP_Accessibility_Play</key>
+	<string>Play</string>
+	<key>VP_Accessibility_SaveFrame</key>
+	<string>Save frame</string>
+	<key>VP_Accessibility_ScoringToggle</key>
+	<string>Toggle scoring mode</string>
+	<key>VP_Accessibility_Stop</key>
+	<string>Stop</string>
+	<key>VP_Alert_AutoPick_Message</key>
+	<string>Would you like to automatically pick the best frames?</string>
+	<key>VP_Alert_Confirm_Title</key>
+	<string>Confirmation</string>
+	<key>VP_Alert_PhotosAccess_Message</key>
+	<string>Allow photo library access to view your videos.</string>
+	<key>VP_Alert_PhotosAccess_Title</key>
+	<string>Photo access required</string>
+	<key>VP_Button_Back</key>
+	<string>Back</string>
+	<key>VP_Button_Cancel</key>
+	<string>Cancel</string>
+	<key>VP_Button_Next</key>
+	<string>Next</string>
+	<key>VP_Button_No</key>
+	<string>No</string>
+	<key>VP_Button_OpenSettings</key>
+	<string>Open Settings</string>
+	<key>VP_Button_Save</key>
+	<string>Save</string>
+	<key>VP_Button_Yes</key>
+	<string>Yes</string>
+	<key>VP_Control_1f</key>
+	<string>1f</string>
+	<key>VP_Control_1s</key>
+	<string>1s</string>
+	<key>VP_Control_5f</key>
+	<string>5f</string>
+	<key>VP_Control_5s</key>
+	<string>5s</string>
+	<key>VP_Empty_Authorized</key>
+	<string>Use the bottom-right button to select videos.</string>
+	<key>VP_Empty_Denied</key>
+	<string>Use the bottom-right button to allow photo access in Settings.</string>
+	<key>VP_Empty_NotDetermined</key>
+	<string>Allow photo access from the bottom-right button to view videos.</string>
+	<key>VP_Empty_Unknown</key>
+	<string>Unknown status</string>
+	<key>VP_Format_Duration_MinuteSecond</key>
+	<string>%d:%02d</string>
+	<key>VP_Format_Timestamp</key>
+	<string>%02d:%02d.%03d</string>
+	<key>VP_Label_ScoreResult</key>
+	<string>Score: %d/100</string>
+	<key>VP_Loading_Video</key>
+	<string>Loading…</string>
+	<key>VP_Mode_Person</key>
+	<string>People</string>
+	<key>VP_Mode_Scenery</key>
+	<string>Scenery</string>
+	<key>VP_Scoring_Empty</key>
+	<string>No matching frames found.</string>
+	<key>VP_Scoring_InProgress</key>
+	<string>Scoring…</string>
+	<key>VP_Title_FrameDetail</key>
+	<string>Frame Detail</string>
+	<key>VP_Title_Main</key>
+	<string>VideoPicker</string>
+	<key>VP_Title_ScoringResult</key>
+	<string>Score Results</string>
+	<key>VP_Title_VideoDetail</key>
+	<string>Video Detail</string>
+	<key>VP_Toast_Saved</key>
+	<string>Saved</string>
 </dict>
 </plist>
