@@ -52,7 +52,8 @@ struct VideoScoringView: View {
                                     Image(uiImage: frame.image)
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .frame(width: 110)
+                                        .frame(height: 110)
                                         .clipped()
 
                                     Text(frame.timeLabel)
