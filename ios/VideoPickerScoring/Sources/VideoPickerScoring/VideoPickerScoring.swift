@@ -1,4 +1,5 @@
 import Foundation
+import VideoPickerScoringCore
 
 public struct VideoQualityItem {
     public let id: String
@@ -36,26 +37,34 @@ public final class VideoPickerScoring {
         let code = url.path.withCString { path in
             vp_analyze_video_file(analyzer, path, &result)
         }
-        if code != VP_OK {
+        if code != 0 {
             throw VideoPickerScoringError.analyzeFailed(code: code)
         }
-        let meanItems = (0..<Int(result.item_count)).map { index -> VideoQualityItem in
-            let item = result.mean[index]
-            let id = withUnsafePointer(to: item.id_str) {
-                $0.withMemoryRebound(to: CChar.self, capacity: Int(VP_METRIC_ID_MAX_LEN)) {
-                    String(cString: $0)
+        let meanItems = withUnsafePointer(to: &result.mean) { pointer in
+            pointer.withMemoryRebound(to: VpItemResult.self, capacity: Int(result.item_count)) { buffer in
+                (0..<Int(result.item_count)).map { index -> VideoQualityItem in
+                    let item = buffer[index]
+                    let id = withUnsafePointer(to: item.id_str) {
+                        $0.withMemoryRebound(to: CChar.self, capacity: Int(VP_METRIC_ID_MAX_LEN)) {
+                            String(cString: $0)
+                        }
+                    }
+                    return VideoQualityItem(id: id, score: item.score, raw: item.raw)
                 }
             }
-            return VideoQualityItem(id: id, score: item.score, raw: item.raw)
         }
-        let worstItems = (0..<Int(result.item_count)).map { index -> VideoQualityItem in
-            let item = result.worst[index]
-            let id = withUnsafePointer(to: item.id_str) {
-                $0.withMemoryRebound(to: CChar.self, capacity: Int(VP_METRIC_ID_MAX_LEN)) {
-                    String(cString: $0)
+        let worstItems = withUnsafePointer(to: &result.worst) { pointer in
+            pointer.withMemoryRebound(to: VpItemResult.self, capacity: Int(result.item_count)) { buffer in
+                (0..<Int(result.item_count)).map { index -> VideoQualityItem in
+                    let item = buffer[index]
+                    let id = withUnsafePointer(to: item.id_str) {
+                        $0.withMemoryRebound(to: CChar.self, capacity: Int(VP_METRIC_ID_MAX_LEN)) {
+                            String(cString: $0)
+                        }
+                    }
+                    return VideoQualityItem(id: id, score: item.score, raw: item.raw)
                 }
             }
-            return VideoQualityItem(id: id, score: item.score, raw: item.raw)
         }
         return VideoQualityAggregate(mean: meanItems, worst: worstItems)
     }
