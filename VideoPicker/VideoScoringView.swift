@@ -111,7 +111,7 @@ struct FrameDetailView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .padding(.horizontal, 16)
 
-                        Text("採用フレーム: \(frames[index].timeLabel)")
+                        Text("採点結果: \(frames[index].score)/100")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.bottom, 16)
@@ -295,7 +295,7 @@ final class VideoScoringViewModel: ObservableObject {
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
             if let image = try? await generateImage(with: generator, at: time) {
-                let score = 72 + (index * 2)
+                let score = 70 + Int(abs(sin(Double(index))) * 30)
                 let frame = ScoredFrame(image: image, time: time, score: score)
                 if frame.score >= 75 {
                     scoredFrames.append(frame)
