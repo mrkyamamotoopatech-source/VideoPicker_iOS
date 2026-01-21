@@ -44,6 +44,11 @@ final class VideoScoringViewModel: ObservableObject {
     init(asset: PHAsset, assetLoader: VideoAssetLoader = VideoAssetLoader()) {
         self.asset = asset
         self.assetLoader = assetLoader
+#if canImport(VideoPickerScoring)
+        NSLog("VideoPickerScoring canImport = true")
+#else
+        NSLog("VideoPickerScoring canImport = false")
+#endif
     }
 
     func rescore(for mode: ScoringMode) async {
