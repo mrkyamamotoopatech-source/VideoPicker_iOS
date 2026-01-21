@@ -5,7 +5,7 @@
 //  Created by 山本敬之 on 2026/01/20.
 //
 
-import AVKit
+@preconcurrency import AVKit
 import Photos
 import SwiftUI
 import UIKit
