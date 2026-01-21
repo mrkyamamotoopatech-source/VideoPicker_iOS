@@ -50,15 +50,8 @@ struct VideoScoringView: View {
                                         .resizable()
                                         .scaledToFill()
                                         .frame(height: 110)
+                                        .frame(maxWidth: .infinity)
                                         .clipped()
-                                        .background(Color.black.opacity(0.05))
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                                    if frame.score == viewModel.highestScore {
-                                        BestBadge()
-                                            .padding(6)
-                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                    }
 
                                     Text(frame.timeLabel)
                                         .font(.caption.weight(.semibold))
@@ -69,6 +62,14 @@ struct VideoScoringView: View {
                                         .clipShape(Capsule())
                                         .padding(6)
                                 }
+                                .background(Color.black.opacity(0.05))
+                                .overlay(alignment: .topLeading) {
+                                    if frame.score == viewModel.highestScore {
+                                        BestBadge()
+                                            .padding(6)
+                                    }
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                             .buttonStyle(.plain)
                         }
