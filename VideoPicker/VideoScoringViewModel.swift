@@ -188,14 +188,29 @@ final class VideoScoringViewModel: ObservableObject {
 
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
-        guard let urlAsset = asset as? AVURLAsset else { return nil }
+        guard let urlAsset = asset as? AVURLAsset else {
+            NSLog("VideoPickerScoring skipped: AVAsset is not AVURLAsset")
+            return nil
+        }
         do {
             let scorer = try VideoPickerScoring()
             let result = try scorer.analyze(url: urlAsset.url)
+            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
             return score
         } catch {
+            if case let VideoPickerScoringError.analyzeFailed(code) = error {
+                let message = videoPickerScoringErrorMessage(for: code)
+                NSLog(
+                    "VideoPickerScoring analyze failed: code=%d (%@) url=%@",
+                    code,
+                    message,
+                    urlAsset.url.path
+                )
+            } else {
+                NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
+            }
             return nil
         }
 #else
@@ -239,6 +254,23 @@ final class VideoScoringViewModel: ObservableObject {
             .joined(separator: ", ")
         let scoreText = weightedScore.map(String.init) ?? "nil"
         NSLog("VideoPickerScoring details (mode=%@): %@ weightedScore=%@", "\(mode)", detailString, scoreText)
+    }
+
+    private func videoPickerScoringErrorMessage(for code: Int32) -> String {
+        switch code {
+        case 1:
+            return "invalid argument"
+        case 2:
+            return "allocation failure"
+        case 3:
+            return "ffmpeg error"
+        case 4:
+            return "decode error"
+        case 5:
+            return "unsupported video or codec"
+        default:
+            return "unknown error"
+        }
     }
 #endif
 }
