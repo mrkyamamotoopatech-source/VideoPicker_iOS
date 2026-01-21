@@ -291,12 +291,11 @@ final class VideoDetailViewModel: ObservableObject {
 
         do {
             let cgImage = try await withCheckedThrowingContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        let image = try generator.copyCGImage(at: time, actualTime: nil)
-                        continuation.resume(returning: image)
-                    } catch {
-                        continuation.resume(throwing: error)
+                generator.generateCGImageAsynchronously(for: time) { cgImage, _, error in
+                    if let cgImage {
+                        continuation.resume(returning: cgImage)
+                    } else {
+                        continuation.resume(throwing: error ?? NSError(domain: "ImageGenerator", code: 1))
                     }
                 }
             }
