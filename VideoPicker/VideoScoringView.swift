@@ -91,21 +91,6 @@ struct VideoScoringView: View {
         .background(Color(uiColor: .systemBackground))
         .navigationTitle("採点結果")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                HStack(spacing: 6) {
-                    Text(isPersonScoring ? "人物" : "景色")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Toggle("", isOn: $isPersonScoring)
-                        .labelsHidden()
-                }
-                .padding(.trailing, 4)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("採点モード")
-                .accessibilityValue(isPersonScoring ? "人物" : "景色")
-            }
-        }
         .task {
             await viewModel.startScoring()
         }
@@ -113,6 +98,30 @@ struct VideoScoringView: View {
             Task {
                 await viewModel.rescore(for: newValue ? .person : .scenery)
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                isPersonScoring.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.2.fill")
+                        .font(.headline.weight(.bold))
+                    Text(isPersonScoring ? "人物" : "景色")
+                        .font(.footnote.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .shadow(color: Color.black.opacity(0.2), radius: 6, x: 0, y: 3)
+                )
+            }
+            .padding(.trailing, 20)
+            .padding(.bottom, 20)
+            .accessibilityLabel("採点モードを切り替え")
+            .accessibilityValue(isPersonScoring ? "人物" : "景色")
         }
     }
 }
