@@ -27,6 +27,11 @@ struct VideoPickerScoringSampleView: View {
             let scorer = try VideoPickerScoring()
             let result = try scorer.analyze(url: sampleURL)
             var lines: [String] = []
+            if let weightedScore = VideoPickerScoring.weightedScore(for: result) {
+                lines.append("WeightedScore: \(String(format: "%.3f", weightedScore))")
+            } else {
+                lines.append("WeightedScore: n/a")
+            }
             lines.append("Mean:")
             for item in result.mean {
                 lines.append("  \(item.id): score=\(String(format: "%.3f", item.score)) raw=\(String(format: "%.5f", item.raw))")

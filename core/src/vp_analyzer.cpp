@@ -50,6 +50,10 @@ static float compute_noise_wrapper(const GrayFrame& frame, const GrayFrame*) {
   return compute_noise_estimate(frame);
 }
 
+static float compute_person_blur_wrapper(const GrayFrame& frame, const GrayFrame*) {
+  return compute_sharpness(frame);
+}
+
 class AnalyzerImpl {
  public:
   explicit AnalyzerImpl(const VpConfig& config)
@@ -58,6 +62,7 @@ class AnalyzerImpl {
     metrics_.push_back({VP_METRIC_EXPOSURE, config_.exposure, compute_exposure_wrapper});
     metrics_.push_back({VP_METRIC_MOTION_BLUR, config_.motion_blur, compute_motion_blur_wrapper});
     metrics_.push_back({VP_METRIC_NOISE, config_.noise, compute_noise_wrapper});
+    metrics_.push_back({VP_METRIC_PERSON_BLUR, config_.sharpness, compute_person_blur_wrapper});
   }
 
   int analyze(const char* path, VpAggregateResult* out_result) {

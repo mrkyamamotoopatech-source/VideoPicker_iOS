@@ -11,6 +11,8 @@ class VideoPickerScoringSample(private val scoring: VideoPickerScoring) {
             Log.e("VideoPickerScoring", "Analyze failed")
             return
         }
+        val weightedScore = scoring.weightedScore(result)
+        Log.d("VideoPickerScoring", "weightedScore=${weightedScore ?: "n/a"}")
         result.mean.forEach { item ->
             Log.d("VideoPickerScoring", "mean ${item.id} score=${item.score} raw=${item.raw}")
         }

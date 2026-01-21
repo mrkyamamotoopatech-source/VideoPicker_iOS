@@ -41,7 +41,8 @@ docs/
 - `VpConfig`: fps/max_frames/start_time_sec と各指標の `VpThreshold (good/bad)` を保持。
 - `VpAggregateResult`: 各指標の mean/worst を別配列で保持。
 - `VpItemResult`: `id`, `id_str`, `raw`, `score` を持ち、raw と score を両方返す。
-- `VpMetricId`: 4項目は enum 化。
+- `VpMetricId`: 5項目は enum 化。
+- `VpMetricId` に `person_blur` を追加（MVPは人物領域の代わりに全体sharpnessを使う）。
 - `vp_create / vp_analyze_video_file / vp_destroy` を C ABI で公開。
 - エラーは `VpErrorCode` の int 値で返却。
 
@@ -135,6 +136,8 @@ xcodebuild -create-xcframework \
 
 - iOS: `VideoPickerScoring().analyze(url:)`
 - Android: `VideoPickerScoring().analyzeVideo(filePath)`
+- iOS: `VideoPickerScoring.weightedScore(for:)` (person_blur が無い場合は除外)
+- Android: `VideoPickerScoring().weightedScore(aggregate)` (person_blur が無い場合は除外)
 
 ### 19. よくある落とし穴
 
