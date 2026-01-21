@@ -52,8 +52,8 @@ struct VideoScoringView: View {
                                     Image(uiImage: frame.image)
                                         .resizable()
                                         .scaledToFill()
+                                        .frame(width: 110)
                                         .frame(height: 110)
-                                        .frame(maxWidth: .infinity)
                                         .clipped()
 
                                     Text(frame.timeLabel)
@@ -77,6 +77,7 @@ struct VideoScoringView: View {
                                     }
                                 }
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .aspectRatio(1, contentMode: .fit)
                             }
                             .buttonStyle(.plain)
                         }
