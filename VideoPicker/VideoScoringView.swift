@@ -328,28 +328,32 @@ final class VideoScoringViewModel: ObservableObject {
 
 private struct BestBadge: View {
     var body: some View {
-        Text("BEST")
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(.white)
-            .padding(.vertical, 3)
-            .padding(.horizontal, 16)
-            .background(
-                ParallelogramShape(slantRatio: 0.25)
-                    .fill(Color.red)
-            )
-            .rotationEffect(.degrees(-45))
+        ZStack {
+            TagShape(notchRatio: 0.3)
+                .fill(Color.red)
+
+            Text("BEST")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 2)
+        }
+        .fixedSize()
+        .rotationEffect(.degrees(-45))
     }
 }
 
-private struct ParallelogramShape: Shape {
-    let slantRatio: CGFloat
+private struct TagShape: Shape {
+    let notchRatio: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        let slant = rect.width * slantRatio
+        let notchDepth = min(rect.width * notchRatio, rect.width * 0.5)
+        let notchMid = rect.midY
         return Path { path in
-            path.move(to: CGPoint(x: slant, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX - slant, y: rect.maxY))
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - notchDepth, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: notchMid))
+            path.addLine(to: CGPoint(x: rect.maxX - notchDepth, y: rect.maxY))
             path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
             path.closeSubpath()
         }
