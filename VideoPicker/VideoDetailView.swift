@@ -5,14 +5,16 @@
 //  Created by 山本敬之 on 2026/01/20.
 //
 
-import AVKit
+@preconcurrency import AVKit
 import Photos
 import SwiftUI
+import UIKit
 
 struct VideoDetailView: View {
     let item: VideoItem
 
     @StateObject private var viewModel: VideoDetailViewModel
+    @State private var showsSaveToast = false
 
     init(item: VideoItem) {
         self.item = item
@@ -30,6 +32,7 @@ struct VideoDetailView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(uiColor: .systemBackground))
+            .overlay(saveToastOverlay, alignment: .bottom)
         }
         .navigationTitle("動画詳細")
         .navigationBarTitleDisplayMode(.inline)
@@ -54,37 +57,82 @@ struct VideoDetailView: View {
     }
 
     private var controlsArea: some View {
-        HStack {
-            HStack(spacing: 18) {
-                ForEach(leftControls, id: \.id) { control in
-                    ControlButton(control: control)
+        VStack(spacing: 14) {
+            HStack {
+                HStack(spacing: 18) {
+                    ForEach(leftControls, id: \.id) { control in
+                        ControlButton(control: control)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    viewModel.togglePlay()
+                } label: {
+                    Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .frame(width: 56, height: 56)
+                        .background(Circle().fill(Color.accentColor.opacity(0.15)))
+                }
+                .accessibilityLabel(viewModel.isPlaying ? "停止" : "再生")
+                .disabled(viewModel.player == nil)
+
+                Spacer()
+
+                HStack(spacing: 18) {
+                    ForEach(rightControls, id: \.id) { control in
+                        ControlButton(control: control)
+                    }
                 }
             }
-
-            Spacer()
 
             Button {
-                viewModel.togglePlay()
-            } label: {
-                Image(systemName: viewModel.isPlaying ? "stop.fill" : "play.fill")
-                    .font(.system(size: 28, weight: .bold))
-                    .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color.accentColor.opacity(0.15)))
-            }
-            .accessibilityLabel(viewModel.isPlaying ? "停止" : "再生")
-            .disabled(viewModel.player == nil)
-
-            Spacer()
-
-            HStack(spacing: 18) {
-                ForEach(rightControls, id: \.id) { control in
-                    ControlButton(control: control)
+                Task {
+                    if await viewModel.saveCurrentFrame() {
+                        await showSaveToast()
+                    }
                 }
+            } label: {
+                Label("保存", systemImage: "square.and.arrow.down")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 112, height: 34)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
             }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isPlaying || viewModel.player == nil)
+            .accessibilityLabel("フレームを保存")
+            .padding(.top, 8)
         }
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(uiColor: .secondarySystemBackground))
+    }
+
+    private var saveToastOverlay: some View {
+        Group {
+            if showsSaveToast {
+                Text("保存しました")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.black.opacity(0.75)))
+                    .foregroundColor(.white)
+                    .padding(.bottom, 24)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showsSaveToast)
+    }
+
+    private func showSaveToast() async {
+        await MainActor.run {
+            showsSaveToast = true
+        }
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        await MainActor.run {
+            showsSaveToast = false
+        }
     }
 
     private var leftControls: [ControlAction] {
@@ -161,6 +209,7 @@ final class VideoDetailViewModel: ObservableObject {
     @Published var isPlaying = false
 
     private let asset: PHAsset
+    private var avAsset: AVAsset?
     private var statusObservation: NSKeyValueObservation?
 
     init(asset: PHAsset) {
@@ -170,6 +219,7 @@ final class VideoDetailViewModel: ObservableObject {
     func loadPlayer() async {
         guard player == nil else { return }
         let avAsset = await loadAVAsset()
+        self.avAsset = avAsset
         let playerItem = AVPlayerItem(asset: avAsset)
         let newPlayer = AVPlayer(playerItem: playerItem)
         player = newPlayer
@@ -203,6 +253,12 @@ final class VideoDetailViewModel: ObservableObject {
         item.step(byCount: frames)
     }
 
+    func saveCurrentFrame() async -> Bool {
+        guard let player, let avAsset, !isPlaying else { return false }
+        let time = player.currentTime()
+        return await saveFrame(at: time, from: avAsset)
+    }
+
     private func observePlayer(_ player: AVPlayer) {
         statusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
             Task { @MainActor in
@@ -220,6 +276,65 @@ final class VideoDetailViewModel: ObservableObject {
                     continuation.resume(returning: avAsset)
                 } else {
                     continuation.resume(returning: AVURLAsset(url: URL(fileURLWithPath: "/dev/null")))
+                }
+            }
+        }
+    }
+
+    private func saveFrame(at time: CMTime, from asset: AVAsset) async -> Bool {
+        guard await requestPhotoLibraryAccess() else { return false }
+
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+
+        do {
+            let cgImage = try await withCheckedThrowingContinuation { continuation in
+                generator.generateCGImageAsynchronously(for: time) { cgImage, _, error in
+                    if let cgImage {
+                        continuation.resume(returning: cgImage)
+                    } else {
+                        continuation.resume(throwing: error ?? NSError(domain: "ImageGenerator", code: 1))
+                    }
+                }
+            }
+            let uiImage = UIImage(cgImage: cgImage)
+            try await saveImageToLibrary(uiImage)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func requestPhotoLibraryAccess() async -> Bool {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        switch status {
+        case .authorized, .limited:
+            return true
+        case .notDetermined:
+            let newStatus = await withCheckedContinuation { continuation in
+                PHPhotoLibrary.requestAuthorization(for: .addOnly) { updatedStatus in
+                    continuation.resume(returning: updatedStatus)
+                }
+            }
+            return newStatus == .authorized || newStatus == .limited
+        default:
+            return false
+        }
+    }
+
+    private func saveImageToLibrary(_ image: UIImage) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }) { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if success {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: NSError(domain: "PhotoSave", code: 1))
                 }
             }
         }
