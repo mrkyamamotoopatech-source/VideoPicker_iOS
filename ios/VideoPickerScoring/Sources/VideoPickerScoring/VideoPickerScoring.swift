@@ -20,6 +20,10 @@ public enum VideoPickerScoringError: Error {
 public final class VideoPickerScoring {
     private let analyzer: OpaquePointer
 
+    public convenience init() throws {
+        try self.init(config: Self.defaultConfig())
+    }
+
     public init(config: VpConfig = VideoPickerScoring.defaultConfig()) throws {
         var mutableConfig = config
         guard let analyzer = vp_create(&mutableConfig) else {
