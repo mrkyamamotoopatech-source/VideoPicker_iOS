@@ -192,7 +192,9 @@ final class VideoScoringViewModel: ObservableObject {
         do {
             let scorer = try VideoPickerScoring()
             let result = try scorer.analyze(url: urlAsset.url)
-            return weightedScore(from: result.mean, mode: scoringMode)
+            let score = weightedScore(from: result.mean, mode: scoringMode)
+            logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
+            return score
         } catch {
             return nil
         }
@@ -229,6 +231,14 @@ final class VideoScoringViewModel: ObservableObject {
             return partial + score * item.value
         }
         return Int((total * 100).rounded())
+    }
+
+    private func logScoringDetails(items: [VideoQualityItem], weightedScore: Int?, mode: ScoringMode) {
+        let detailString = items
+            .map { "\($0.id)=\($0.score)" }
+            .joined(separator: ", ")
+        let scoreText = weightedScore.map(String.init) ?? "nil"
+        NSLog("VideoPickerScoring details (mode=%@): %@ weightedScore=%@", "\(mode)", detailString, scoreText)
     }
 #endif
 }
