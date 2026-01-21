@@ -9,7 +9,9 @@ import AVFoundation
 import Photos
 import SwiftUI
 import UIKit
+#if canImport(VideoPickerScoring)
 import VideoPickerScoring
+#endif
 
 struct VideoScoringView: View {
     let item: VideoItem
@@ -332,6 +334,7 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
+#if canImport(VideoPickerScoring)
         guard let urlAsset = asset as? AVURLAsset else { return nil }
         do {
             let scorer = try VideoPickerScoring()
@@ -340,8 +343,12 @@ final class VideoScoringViewModel: ObservableObject {
         } catch {
             return nil
         }
+#else
+        return nil
+#endif
     }
 
+#if canImport(VideoPickerScoring)
     private func weightedScore(from items: [VideoQualityItem]) -> Int? {
         let weights: [String: Float] = [
             "sharpness": 0.35,
@@ -359,6 +366,7 @@ final class VideoScoringViewModel: ObservableObject {
         }
         return Int((total * 100).rounded())
     }
+#endif
 }
 
 private func formatTimestamp(_ time: CMTime) -> String {
