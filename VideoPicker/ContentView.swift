@@ -29,9 +29,14 @@ struct ContentView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 8) {
                                 ForEach(vm.items) { item in
-                                    VideoThumbnailCell(item: item) { asset, size in
-                                        await vm.thumbnail(for: asset, targetSize: size)
+                                    NavigationLink {
+                                        VideoDetailView(item: item)
+                                    } label: {
+                                        VideoThumbnailCell(item: item) { asset, size in
+                                            await vm.thumbnail(for: asset, targetSize: size)
+                                        }
                                     }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             .padding(12)
