@@ -294,7 +294,7 @@ final class VideoDetailViewModel: ObservableObject {
     }
 
     private func saveImageToLibrary(_ image: UIImage) async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             PHPhotoLibrary.shared().performChanges({
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }) { success, error in
