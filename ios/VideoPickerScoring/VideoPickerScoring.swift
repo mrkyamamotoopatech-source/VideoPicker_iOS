@@ -11,6 +11,11 @@ public struct VideoQualityAggregate {
     public let worst: [VideoQualityItem]
 }
 
+public enum VideoSceneMode: String {
+    case person
+    case landscape
+}
+
 public enum VideoPickerScoringError: Error {
     case createFailed
     case analyzeFailed(code: Int32)
@@ -58,6 +63,11 @@ public final class VideoPickerScoring {
             return VideoQualityItem(id: id, score: item.score, raw: item.raw)
         }
         return VideoQualityAggregate(mean: meanItems, worst: worstItems)
+    }
+
+    public func analyze(url: URL, mode: VideoSceneMode) throws -> VideoQualityAggregate {
+        _ = mode
+        return try analyze(url: url)
     }
 
     public static func defaultConfig() -> VpConfig {

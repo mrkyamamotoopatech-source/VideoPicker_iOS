@@ -134,7 +134,9 @@ xcodebuild -create-xcframework \
 ### 18. API利用例
 
 - iOS: `VideoPickerScoring().analyze(url:)`
+- iOS(シーン指定): `VideoPickerScoring().analyze(url:mode:)`
 - Android: `VideoPickerScoring().analyzeVideo(filePath)`
+- Android(シーン指定): `VideoPickerScoring().analyzeVideo(filePath, mode)`
 
 ### 19. よくある落とし穴
 
