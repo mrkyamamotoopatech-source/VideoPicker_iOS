@@ -9,6 +9,9 @@ import AVFoundation
 import Photos
 import SwiftUI
 import UIKit
+#if canImport(VideoPickerScoring)
+import VideoPickerScoring
+#endif
 
 struct VideoScoringView: View {
     let item: VideoItem
@@ -295,12 +298,13 @@ final class VideoScoringViewModel: ObservableObject {
 
         let sampleCount = 18
         var bestFrame: ScoredFrame?
+        let weightedScore = await loadWeightedScore(from: asset)
 
         for index in 0..<sampleCount {
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
             if let image = try? await generateImage(with: generator, at: time) {
-                let score = 70 + Int(abs(sin(Double(index))) * 30)
+                let score = weightedScore ?? (70 + Int(abs(sin(Double(index))) * 30))
                 let frame = ScoredFrame(image: image, time: time, score: score)
                 if frame.score >= 75 {
                     scoredFrames.append(frame)
@@ -328,6 +332,41 @@ final class VideoScoringViewModel: ObservableObject {
         }
         return UIImage(cgImage: cgImage)
     }
+
+    private func loadWeightedScore(from asset: AVAsset) async -> Int? {
+#if canImport(VideoPickerScoring)
+        guard let urlAsset = asset as? AVURLAsset else { return nil }
+        do {
+            let scorer = try VideoPickerScoring()
+            let result = try scorer.analyze(url: urlAsset.url)
+            return weightedScore(from: result.mean)
+        } catch {
+            return nil
+        }
+#else
+        return nil
+#endif
+    }
+
+#if canImport(VideoPickerScoring)
+    private func weightedScore(from items: [VideoQualityItem]) -> Int? {
+        let weights: [String: Float] = [
+            "sharpness": 0.35,
+            "motion_blur": 0.30,
+            "exposure": 0.20,
+            "noise": 0.15
+        ]
+        let scores = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.score) })
+        let requiredKeys = ["sharpness", "motion_blur", "exposure", "noise"]
+        guard requiredKeys.allSatisfy({ scores[$0] != nil }) else { return nil }
+
+        let total = weights.reduce(Float(0)) { partial, item in
+            let score = max(0, min(scores[item.key] ?? 0, 1))
+            return partial + score * item.value
+        }
+        return Int((total * 100).rounded())
+    }
+#endif
 }
 
 private func formatTimestamp(_ time: CMTime) -> String {
