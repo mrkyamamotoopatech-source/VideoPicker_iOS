@@ -34,7 +34,6 @@ struct VideoThumbnailCell: View {
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
-                .cornerRadius(10)
 
                 Text(formatDuration(item.duration))
                     .font(.caption2)
@@ -45,6 +44,7 @@ struct VideoThumbnailCell: View {
                     .cornerRadius(6)
                     .padding(6)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .aspectRatio(1, contentMode: .fit) // 正方形
     }
