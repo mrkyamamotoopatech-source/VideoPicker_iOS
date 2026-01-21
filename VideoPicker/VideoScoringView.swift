@@ -331,11 +331,28 @@ private struct BestBadge: View {
         Text("BEST")
             .font(.caption2.weight(.bold))
             .foregroundStyle(.white)
-            .padding(.vertical, 2)
-            .padding(.horizontal, 14)
-            .background(Color.red)
+            .padding(.vertical, 3)
+            .padding(.horizontal, 16)
+            .background(
+                ParallelogramShape(slantRatio: 0.25)
+                    .fill(Color.red)
+            )
             .rotationEffect(.degrees(-45))
-            .offset(x: -10, y: 6)
+    }
+}
+
+private struct ParallelogramShape: Shape {
+    let slantRatio: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let slant = rect.width * slantRatio
+        return Path { path in
+            path.move(to: CGPoint(x: slant, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - slant, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.closeSubpath()
+        }
     }
 }
 
