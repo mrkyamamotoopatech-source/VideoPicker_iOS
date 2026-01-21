@@ -1,4 +1,5 @@
 import Foundation
+import VideoPickerScoringCore
 
 public struct VideoQualityItem {
     public let id: String

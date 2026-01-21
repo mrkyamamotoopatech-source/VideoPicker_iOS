@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		10735AFA2F1F5137007678C7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -65,6 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,6 +130,7 @@
 			);
 			name = VideoPicker;
 			packageProductDependencies = (
+				D0C8A5D02F7A123400000003 /* VideoPickerScoring */,
 			);
 			productName = VideoPicker;
 			productReference = 10735AEC2F1F5135007678C7 /* VideoPicker.app */;
@@ -209,6 +215,9 @@
 			);
 			mainGroup = 10735AE32F1F5135007678C7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "VideoPickerScoring" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 10735AED2F1F5135007678C7 /* Products */;
 			projectDirPath = "";
@@ -268,6 +277,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "VideoPickerScoring" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ios/VideoPickerScoring;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D0C8A5D02F7A123400000003 /* VideoPickerScoring */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "VideoPickerScoring" */;
+			productName = VideoPickerScoring;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXTargetDependency section */
 		10735AFB2F1F5137007678C7 /* PBXTargetDependency */ = {
