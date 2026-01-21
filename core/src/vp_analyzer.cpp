@@ -75,7 +75,8 @@ class AnalyzerImpl {
     bool has_previous = false;
     int processed_frames = 0;
 
-    int decode_result = decoder.decode(config_.fps, config_.max_frames, [&](const DecodedFrame& decoded) {
+    int decode_result = decoder.decode(config_.fps, config_.max_frames, config_.start_time_sec,
+                                       [&](const DecodedFrame& decoded) {
       GrayFrame frame;
       frame.width = decoded.width;
       frame.height = decoded.height;
@@ -152,6 +153,7 @@ void vp_default_config(VpConfig* config) {
   }
   config->fps = 5.0f;
   config->max_frames = 300;
+  config->start_time_sec = 0.0f;
   config->sharpness = {800.0f, 50.0f};
   config->exposure = {0.01f, 0.2f};
   config->motion_blur = {0.2f, 1.5f};

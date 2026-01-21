@@ -38,7 +38,7 @@ docs/
 
 ### 2. C ABIヘッダ (vp_analyzer.h) とデータ構造
 
-- `VpConfig`: fps/max_frames と各指標の `VpThreshold (good/bad)` を保持。
+- `VpConfig`: fps/max_frames/start_time_sec と各指標の `VpThreshold (good/bad)` を保持。
 - `VpAggregateResult`: 各指標の mean/worst を別配列で保持。
 - `VpItemResult`: `id`, `id_str`, `raw`, `score` を持ち、raw と score を両方返す。
 - `VpMetricId`: 4項目は enum 化。
@@ -63,7 +63,7 @@ docs/
 ### 5. FFmpegで動画を開き、指定fpsでフレーム抽出
 
 - `FfmpegDecoder::open()` で動画ストリームを検出。
-- `decode()` で `fps` 間隔で Gray フレームをサンプル。
+- `decode()` で `start_time_sec` から `fps` 間隔で Gray フレームをサンプル。
 - `max_frames` に達したら終了。
 
 ### 6. RGBA(or Gray)へ変換し、raw→score を計算
@@ -76,7 +76,7 @@ docs/
 - mean: raw/score の平均。
 - worst: score 最小のフレームを採用。
 
-### 8. VpConfigで fps/max_frames/閾値を変更
+### 8. VpConfigで fps/max_frames/開始位置/閾値を変更
 
 - `vp_default_config` でデフォルトを埋め、アプリ側で上書き可能。
 - `VpThreshold.good/bad` のみで正規化を制御。

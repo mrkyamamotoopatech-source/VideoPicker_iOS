@@ -70,19 +70,31 @@ int FfmpegDecoder::open(const char* path) {
   return 0;
 }
 
-int FfmpegDecoder::decode(float fps, int max_frames, const std::function<void(const DecodedFrame&)>& on_frame) {
+int FfmpegDecoder::decode(float fps, int max_frames, float start_time_sec,
+                          const std::function<void(const DecodedFrame&)>& on_frame) {
   if (!format_context_ || !codec_context_) {
     return -1;
+  }
+
+  if (start_time_sec < 0.0f) {
+    start_time_sec = 0.0f;
   }
 
   if (fps <= 0.0f) {
     fps = 5.0f;
   }
   double frame_interval = 1.0 / static_cast<double>(fps);
-  double next_sample_time = 0.0;
+  double next_sample_time = static_cast<double>(start_time_sec);
   int sampled_frames = 0;
 
   AVRational time_base = format_context_->streams[video_stream_index_]->time_base;
+
+  if (start_time_sec > 0.0f) {
+    int64_t seek_target = static_cast<int64_t>(start_time_sec / av_q2d(time_base));
+    if (av_seek_frame(format_context_, video_stream_index_, seek_target, AVSEEK_FLAG_BACKWARD) >= 0) {
+      avcodec_flush_buffers(codec_context_);
+    }
+  }
 
   while (av_read_frame(format_context_, packet_) >= 0) {
     if (packet_->stream_index != video_stream_index_) {

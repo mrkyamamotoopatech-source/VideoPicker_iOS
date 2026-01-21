@@ -25,7 +25,7 @@ class FfmpegDecoder {
   ~FfmpegDecoder();
 
   int open(const char* path);
-  int decode(float fps, int max_frames, const std::function<void(const DecodedFrame&)>& on_frame);
+  int decode(float fps, int max_frames, float start_time_sec, const std::function<void(const DecodedFrame&)>& on_frame);
 
  private:
   AVFormatContext* format_context_;

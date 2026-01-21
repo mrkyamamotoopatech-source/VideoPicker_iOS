@@ -34,6 +34,7 @@ typedef struct {
 typedef struct {
   float fps;
   int32_t max_frames;
+  float start_time_sec;
   VpThreshold sharpness;
   VpThreshold exposure;
   VpThreshold motion_blur;
