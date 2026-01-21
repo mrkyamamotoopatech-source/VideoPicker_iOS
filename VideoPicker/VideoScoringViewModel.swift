@@ -185,7 +185,8 @@ final class VideoScoringViewModel: ObservableObject {
 #if canImport(VideoPickerScoring)
         guard let urlAsset = asset as? AVURLAsset else { return nil }
         do {
-            let scorer = try VideoPickerScoring()
+            let config = scoringConfig(for: scoringMode)
+            let scorer = try VideoPickerScoring(config: config)
             let result = try scorer.analyze(url: urlAsset.url)
             return weightedScore(from: result.mean, mode: scoringMode)
         } catch {
@@ -197,6 +198,21 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 #if canImport(VideoPickerScoring)
+    private func scoringConfig(for mode: ScoringMode) -> VpConfig {
+        var config = VideoPickerScoring.defaultConfig()
+        switch mode {
+        case .person:
+            config.sharpness = VpThreshold(good: 1000.0, bad: 80.0)
+            config.motion_blur = VpThreshold(good: 0.15, bad: 1.2)
+            config.noise = VpThreshold(good: 0.015, bad: 0.12)
+        case .scenery:
+            config.sharpness = VpThreshold(good: 900.0, bad: 60.0)
+            config.motion_blur = VpThreshold(good: 0.25, bad: 1.6)
+            config.noise = VpThreshold(good: 0.02, bad: 0.15)
+        }
+        return config
+    }
+
     private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
         let baseWeights: [String: Float]
         switch mode {
