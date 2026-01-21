@@ -60,7 +60,7 @@ struct VideoScoringView: View {
                                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                                     }
 
-                                    Text("\(frame.score)/100")
+                                    Text(frame.timeLabel)
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 8)
@@ -111,7 +111,7 @@ struct FrameDetailView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .padding(.horizontal, 16)
 
-                        Text("スコア: \(frames[index].score)/100")
+                        Text("採用フレーム: \(frames[index].timeLabel)")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(.bottom, 16)
@@ -236,6 +236,10 @@ struct ScoredFrame: Identifiable {
     let image: UIImage
     let time: CMTime
     let score: Int
+
+    var timeLabel: String {
+        formatTimestamp(time)
+    }
 }
 
 @MainActor
@@ -285,19 +289,26 @@ final class VideoScoringViewModel: ObservableObject {
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
 
-        let sampleCount = 6
+        let sampleCount = 18
         var frames: [ScoredFrame] = []
 
         for index in 0..<sampleCount {
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
             if let image = try? await generateImage(with: generator, at: time) {
-                let score = 60 + (index * 5)
+                let score = 72 + (index * 2)
                 frames.append(ScoredFrame(image: image, time: time, score: score))
             }
         }
 
-        return frames.filter { $0.score >= 75 }
+        let filtered = frames.filter { $0.score >= 75 }
+        if !filtered.isEmpty {
+            return filtered
+        }
+        if let best = frames.max(by: { $0.score < $1.score }) {
+            return [best]
+        }
+        return []
     }
 
     private func generateImage(with generator: AVAssetImageGenerator, at time: CMTime) async throws -> UIImage {
@@ -325,4 +336,13 @@ private struct BestBadge: View {
             .rotationEffect(.degrees(-45))
             .offset(x: -10, y: 6)
     }
+}
+
+private func formatTimestamp(_ time: CMTime) -> String {
+    let totalSeconds = max(time.seconds, 0)
+    let totalMilliseconds = Int((totalSeconds * 1000).rounded(.down))
+    let minutes = totalMilliseconds / 60000
+    let seconds = (totalMilliseconds % 60000) / 1000
+    let milliseconds = totalMilliseconds % 1000
+    return String(format: "%02d:%02d.%03d", minutes, seconds, milliseconds)
 }
