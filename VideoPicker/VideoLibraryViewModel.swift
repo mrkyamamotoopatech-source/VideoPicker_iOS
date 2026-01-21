@@ -16,6 +16,19 @@ final class VideoLibraryViewModel: ObservableObject {
 
     private let imageManager = PHCachingImageManager()
 
+    var emptyMessage: String {
+        switch authorization {
+        case .authorized, .limited:
+            return InfoPlistStrings.string("VP_Empty_Authorized")
+        case .denied, .restricted:
+            return InfoPlistStrings.string("VP_Empty_Denied")
+        case .notDetermined:
+            return InfoPlistStrings.string("VP_Empty_NotDetermined")
+        @unknown default:
+            return InfoPlistStrings.string("VP_Empty_Unknown")
+        }
+    }
+
     func requestAccessAndLoadVideos() {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         authorization = status
@@ -84,4 +97,3 @@ final class VideoLibraryViewModel: ObservableObject {
         }
     }
 }
-

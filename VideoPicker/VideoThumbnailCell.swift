@@ -53,6 +53,6 @@ struct VideoThumbnailCell: View {
         let s = Int(seconds.rounded(.down))
         let m = s / 60
         let r = s % 60
-        return String(format: "%d:%02d", m, r)
+        return InfoPlistStrings.formatted("VP_Format_Duration_MinuteSecond", m, r)
     }
 }

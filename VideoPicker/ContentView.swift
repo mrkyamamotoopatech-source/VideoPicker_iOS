@@ -25,7 +25,7 @@ struct ContentView: View {
                 // ====== 一覧エリア ======
                 VStack {
                     if vm.items.isEmpty {
-                        Text(emptyMessage)
+                        Text(vm.emptyMessage)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
@@ -61,9 +61,9 @@ struct ContentView: View {
                         .shadow(radius: 6)
                         .padding(20)
                 }
-                .accessibilityLabel("動画一覧を読み込む")
+                .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
             }
-            .navigationTitle("VideoPicker")
+            .navigationTitle(InfoPlistStrings.string("VP_Title_Main"))
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: VideoRoute.self) { route in
                 switch route {
@@ -73,25 +73,25 @@ struct ContentView: View {
                     VideoScoringView(item: item)
                 }
             }
-            .alert("写真へのアクセスが必要です", isPresented: $vm.showDeniedAlert) {
-                Button("設定を開く") { openAppSettings() }
-                Button("キャンセル", role: .cancel) {}
+            .alert(InfoPlistStrings.string("VP_Alert_PhotosAccess_Title"), isPresented: $vm.showDeniedAlert) {
+                Button(InfoPlistStrings.string("VP_Button_OpenSettings")) { openAppSettings() }
+                Button(InfoPlistStrings.string("VP_Button_Cancel"), role: .cancel) {}
             } message: {
-                Text("動画一覧を表示するには写真ライブラリへのアクセスを許可してください。")
+                Text(InfoPlistStrings.string("VP_Alert_PhotosAccess_Message"))
             }
-            .alert("確認", isPresented: $showsSelectionDialog) {
-                Button("いいえ", role: .cancel) {
+            .alert(InfoPlistStrings.string("VP_Alert_Confirm_Title"), isPresented: $showsSelectionDialog) {
+                Button(InfoPlistStrings.string("VP_Button_No"), role: .cancel) {
                     guard let item = pendingItem else { return }
                     navigationPath.append(VideoRoute.detail(item))
                     pendingItem = nil
                 }
-                Button("はい") {
+                Button(InfoPlistStrings.string("VP_Button_Yes")) {
                     guard let item = pendingItem else { return }
                     navigationPath.append(VideoRoute.scoring(item))
                     pendingItem = nil
                 }
             } message: {
-                Text("自動で写りの良い写真をピックアップしますか？")
+                Text(InfoPlistStrings.string("VP_Alert_AutoPick_Message"))
             }
             .onAppear {
                 // 起動時に許可済みなら即ロードしても良い
@@ -100,19 +100,6 @@ struct ContentView: View {
 //                    vm.requestAccessAndLoadVideos()
 //                }
             }
-        }
-    }
-
-    private var emptyMessage: String {
-        switch vm.authorization {
-        case .authorized, .limited:
-            return "右下ボタン → 使用する写真を選択してください"
-        case .denied, .restricted:
-            return "右下ボタン → 設定から写真アクセスを許可してください"
-        case .notDetermined:
-            return "右下ボタンで写真アクセスを許可すると動画一覧を表示します"
-        @unknown default:
-            return "状態不明"
         }
     }
 
