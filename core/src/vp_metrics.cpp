@@ -58,6 +58,32 @@ float compute_sharpness(const GrayFrame& frame) {
   return static_cast<float>(variance);
 }
 
+float compute_person_blur(const GrayFrame& frame) {
+  const int width = frame.width;
+  const int height = frame.height;
+  if (width <= 2 || height <= 2) {
+    return compute_sharpness(frame);
+  }
+
+  const float crop_scale = 0.6f;
+  int crop_width = std::max(3, static_cast<int>(std::round(width * crop_scale)));
+  int crop_height = std::max(3, static_cast<int>(std::round(height * crop_scale)));
+  crop_width = std::min(crop_width, width);
+  crop_height = std::min(crop_height, height);
+
+  int x0 = (width - crop_width) / 2;
+  int y0 = (height - crop_height) / 2;
+  const uint8_t* data = frame.data + y0 * frame.stride + x0;
+
+  GrayFrame center_region{
+      crop_width,
+      crop_height,
+      frame.stride,
+      data,
+  };
+  return compute_sharpness(center_region);
+}
+
 float compute_exposure_clipping(const GrayFrame& frame) {
   const int width = frame.width;
   const int height = frame.height;

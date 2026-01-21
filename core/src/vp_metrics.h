@@ -27,6 +27,7 @@ float compute_sharpness(const GrayFrame& frame);
 float compute_exposure_clipping(const GrayFrame& frame);
 float compute_noise_estimate(const GrayFrame& frame);
 float compute_motion_blur(const GrayFrame& frame, const GrayFrame* prev_frame);
+float compute_person_blur(const GrayFrame& frame);
 
 const char* metric_id_to_string(VpMetricId id);
 

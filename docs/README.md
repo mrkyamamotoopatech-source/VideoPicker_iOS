@@ -38,11 +38,11 @@ docs/
 
 ### 2. C ABIヘッダ (vp_analyzer.h) とデータ構造
 
-- `VpConfig`: fps/max_frames/start_time_sec と各指標の `VpThreshold (good/bad)` を保持。
+- `VpConfig`: fps/max_frames/start_time_sec と各指標の `VpThreshold (good/bad)` を保持（person_blur を追加）。
 - `VpAggregateResult`: 各指標の mean/worst を別配列で保持。
 - `VpItemResult`: `id`, `id_str`, `raw`, `score` を持ち、raw と score を両方返す。
 - `VpMetricId`: 5項目は enum 化。
-- `VpMetricId` に `person_blur` を追加（MVPは人物領域の代わりに全体sharpnessを使う）。
+- `VpMetricId` に `person_blur` を追加（中心領域の sharpness を用いて人物のブレを近似）。
 - `vp_create / vp_analyze_video_file / vp_destroy` を C ABI で公開。
 - エラーは `VpErrorCode` の int 値で返却。
 

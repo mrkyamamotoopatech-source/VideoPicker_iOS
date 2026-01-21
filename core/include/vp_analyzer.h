@@ -40,6 +40,7 @@ typedef struct {
   VpThreshold exposure;
   VpThreshold motion_blur;
   VpThreshold noise;
+  VpThreshold person_blur;
 } VpConfig;
 
 typedef struct {
