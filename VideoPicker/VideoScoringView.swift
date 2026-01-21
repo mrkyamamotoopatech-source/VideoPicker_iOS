@@ -352,10 +352,10 @@ final class VideoScoringViewModel: ObservableObject {
 #if canImport(VideoPickerScoring)
     private func weightedScore(from items: [VideoQualityItem]) -> Int? {
         let weights: [String: Float] = [
-            "sharpness": 0.35,
-            "motion_blur": 0.30,
-            "exposure": 0.20,
-            "noise": 0.15
+            "sharpness": 0.20,
+            "motion_blur": 0.40,
+            "exposure": 0.30,
+            "noise": 0.10
         ]
         let scores = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.score) })
         let requiredKeys = ["sharpness", "motion_blur", "exposure", "noise"]
