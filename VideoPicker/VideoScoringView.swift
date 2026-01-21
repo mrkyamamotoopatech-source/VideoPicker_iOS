@@ -262,8 +262,7 @@ final class VideoScoringViewModel: ObservableObject {
         defer { isScoring = false }
 
         let avAsset = await loadAVAsset()
-        let frames = await scoreFrames(from: avAsset)
-        scoredFrames = frames
+        await scoreFrames(from: avAsset)
     }
 
     private func loadAVAsset() async -> AVAsset {
@@ -280,9 +279,9 @@ final class VideoScoringViewModel: ObservableObject {
         }
     }
 
-    private func scoreFrames(from asset: AVAsset) async -> [ScoredFrame] {
+    private func scoreFrames(from asset: AVAsset) async {
         let durationSeconds = CMTimeGetSeconds(asset.duration)
-        guard durationSeconds.isFinite, durationSeconds > 0 else { return [] }
+        guard durationSeconds.isFinite, durationSeconds > 0 else { return }
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -290,25 +289,26 @@ final class VideoScoringViewModel: ObservableObject {
         generator.requestedTimeToleranceAfter = .zero
 
         let sampleCount = 18
-        var frames: [ScoredFrame] = []
+        var bestFrame: ScoredFrame?
 
         for index in 0..<sampleCount {
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
             if let image = try? await generateImage(with: generator, at: time) {
                 let score = 72 + (index * 2)
-                frames.append(ScoredFrame(image: image, time: time, score: score))
+                let frame = ScoredFrame(image: image, time: time, score: score)
+                if frame.score >= 75 {
+                    scoredFrames.append(frame)
+                }
+                if bestFrame == nil || frame.score > (bestFrame?.score ?? 0) {
+                    bestFrame = frame
+                }
             }
         }
 
-        let filtered = frames.filter { $0.score >= 75 }
-        if !filtered.isEmpty {
-            return filtered
+        if scoredFrames.isEmpty, let bestFrame {
+            scoredFrames.append(bestFrame)
         }
-        if let best = frames.max(by: { $0.score < $1.score }) {
-            return [best]
-        }
-        return []
     }
 
     private func generateImage(with generator: AVAssetImageGenerator, at time: CMTime) async throws -> UIImage {
