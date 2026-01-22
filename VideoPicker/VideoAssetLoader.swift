@@ -22,4 +22,39 @@ struct VideoAssetLoader {
             }
         }
     }
+
+    func exportCompatibleURL(for asset: AVAsset) async throws -> URL {
+        let presetName = AVAssetExportPreset1280x720
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: presetName) else {
+            throw NSError(domain: "VideoAssetLoader", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to create export session"
+            ])
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mp4")
+
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+
+        return try await withCheckedThrowingContinuation { continuation in
+            exportSession.exportAsynchronously {
+                switch exportSession.status {
+                case .completed:
+                    continuation.resume(returning: outputURL)
+                case .failed, .cancelled:
+                    let error = exportSession.error ?? NSError(domain: "VideoAssetLoader", code: 2)
+                    continuation.resume(throwing: error)
+                default:
+                    let error = NSError(domain: "VideoAssetLoader", code: 3)
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
 }

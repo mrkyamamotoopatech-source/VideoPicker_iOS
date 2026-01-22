@@ -188,13 +188,10 @@ final class VideoScoringViewModel: ObservableObject {
 
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
-        guard let urlAsset = asset as? AVURLAsset else {
-            NSLog("VideoPickerScoring skipped: AVAsset is not AVURLAsset")
-            return nil
-        }
         do {
             let scorer = try VideoPickerScoring()
-            let result = try scorer.analyze(url: urlAsset.url)
+            let scoringURL = try await loadScoringURL(from: asset)
+            let result = try await analyze(scorer: scorer, url: scoringURL, asset: asset)
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
@@ -206,7 +203,7 @@ final class VideoScoringViewModel: ObservableObject {
                     "VideoPickerScoring analyze failed: code=%d (%@) url=%@",
                     code,
                     message,
-                    urlAsset.url.path
+                    String(describing: (asset as? AVURLAsset)?.url.path)
                 )
             } else {
                 NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
@@ -217,6 +214,34 @@ final class VideoScoringViewModel: ObservableObject {
         return nil
 #endif
     }
+
+#if canImport(VideoPickerScoring)
+    private func loadScoringURL(from asset: AVAsset) async throws -> URL {
+        if let urlAsset = asset as? AVURLAsset {
+            return urlAsset.url
+        }
+        return try await assetLoader.exportCompatibleURL(for: asset)
+    }
+
+    private func analyze(
+        scorer: VideoPickerScoring,
+        url: URL,
+        asset: AVAsset
+    ) async throws -> VideoQualityResult {
+        do {
+            return try scorer.analyze(url: url)
+        } catch {
+            if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5 {
+                NSLog("VideoPickerScoring analyze retry with export for unsupported codec: %@", url.path)
+                if let urlAsset = asset as? AVURLAsset {
+                    let exportURL = try await assetLoader.exportCompatibleURL(for: urlAsset)
+                    return try scorer.analyze(url: exportURL)
+                }
+            }
+            throw error
+        }
+    }
+#endif
 
 #if canImport(VideoPickerScoring)
     private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
