@@ -215,8 +215,6 @@ final class VideoScoringViewModel: ObservableObject {
                 var totalFrames = 0
                 var scoreSums: [String: Float] = [:]
                 var rawSums: [String: Float] = [:]
-                var worstScores: [String: Float] = [:]
-                var worstRaws: [String: Float] = [:]
 
                 func merge(_ result: VideoQualityAggregate, frameCount: Int) {
                     let weight = Float(frameCount)
@@ -224,17 +222,6 @@ final class VideoScoringViewModel: ObservableObject {
                     for item in result.mean {
                         scoreSums[item.id, default: 0] += item.score * weight
                         rawSums[item.id, default: 0] += item.raw * weight
-                    }
-                    for item in result.worst {
-                        if let current = worstScores[item.id] {
-                            if item.score < current {
-                                worstScores[item.id] = item.score
-                                worstRaws[item.id] = item.raw
-                            }
-                        } else {
-                            worstScores[item.id] = item.score
-                            worstRaws[item.id] = item.raw
-                        }
                     }
                 }
 
@@ -276,18 +263,12 @@ final class VideoScoringViewModel: ObservableObject {
                     let meanRaw = (rawSums[id] ?? 0) / Float(totalFrames)
                     return VideoQualityItem(id: id, score: meanScore, raw: meanRaw)
                 }
-                let worstItems = orderedIds.map { id -> VideoQualityItem in
-                    let score = worstScores[id] ?? (scoreSums[id] ?? 0) / Float(totalFrames)
-                    let raw = worstRaws[id] ?? (rawSums[id] ?? 0) / Float(totalFrames)
-                    return VideoQualityItem(id: id, score: score, raw: raw)
-                }
-
                 NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
-                let score = weightedScore(from: meanItems, mode: mode)
+                let score = Self.weightedScore(from: meanItems, mode: mode)
                 return ScoringSummary(items: meanItems, score: score)
             } catch {
                 if case let VideoPickerScoringError.analyzeFailed(code) = error {
-                    let message = videoPickerScoringErrorMessage(for: code)
+                    let message = Self.videoPickerScoringErrorMessage(for: code)
                     NSLog(
                         "VideoPickerScoring analyze failed: code=%d (%@)",
                         code,
@@ -299,7 +280,7 @@ final class VideoScoringViewModel: ObservableObject {
                 return nil
             }
         }
-        let summary = summaryTask.value
+        let summary = await summaryTask.value
 
         guard let summary else {
             return nil
@@ -319,7 +300,7 @@ final class VideoScoringViewModel: ObservableObject {
 #endif
 
 #if canImport(VideoPickerScoring)
-    private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
+    private static func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
         let weights: [String: Float]
         switch mode {
         case .person:
@@ -360,7 +341,7 @@ final class VideoScoringViewModel: ObservableObject {
         NSLog("VideoPickerScoring details (mode=%@): %@ weightedScore=%@", "\(mode)", detailString, scoreText)
     }
 
-    private func videoPickerScoringErrorMessage(for code: Int32) -> String {
+    private static func videoPickerScoringErrorMessage(for code: Int32) -> String {
         switch code {
         case 1:
             return "invalid argument"
