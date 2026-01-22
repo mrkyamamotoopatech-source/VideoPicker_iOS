@@ -35,8 +35,9 @@ final class VideoScoringViewModel: ObservableObject {
 
     private(set) var scoringMode: ScoringMode = .person
     private var scoringTask: Task<Void, Never>?
+    private var weightedScore: Int?
 #if canImport(VideoPickerScoring)
-    private var weightedScoreTask: Task<ScoringSummary?, Never>?
+    private var weightedScoreTask: Task<Int?, Never>?
 #endif
 
     private let asset: PHAsset
@@ -78,6 +79,7 @@ final class VideoScoringViewModel: ObservableObject {
         weightedScoreTask?.cancel()
         weightedScoreTask = nil
 #endif
+        weightedScore = nil
         isScoring = false
     }
 
@@ -110,7 +112,7 @@ final class VideoScoringViewModel: ObservableObject {
 
         let sampleCount = 18
         var bestFrame: ScoredFrame?
-        let weightedScore = await loadWeightedScore(from: asset)
+        startWeightedScoreLoad(for: asset)
 
         for index in 0..<sampleCount {
             if Task.isCancelled { return }
@@ -132,6 +134,26 @@ final class VideoScoringViewModel: ObservableObject {
         if scoredFrames.isEmpty, let bestFrame {
             scoredFrames.append(bestFrame)
         }
+    }
+
+    private func startWeightedScoreLoad(for asset: AVAsset) {
+#if canImport(VideoPickerScoring)
+        weightedScoreTask?.cancel()
+        weightedScore = nil
+        let mode = scoringMode
+        let task = Task.detached { [asset] in
+            await Self.computeWeightedScore(from: asset, mode: mode)
+        }
+        weightedScoreTask = task
+        Task { [weak self] in
+            guard let self else { return }
+            let score = await task.value
+            if Task.isCancelled { return }
+            await MainActor.run {
+                self.weightedScore = score
+            }
+        }
+#endif
     }
 
     private func generateImage(with generator: AVAssetImageGenerator, at time: CMTime) async throws -> UIImage {
@@ -220,124 +242,103 @@ final class VideoScoringViewModel: ObservableObject {
         return min(100, max(0, score))
     }
 
-    private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
-        let mode = scoringMode
-        let summaryTask = Task.detached { () async -> ScoringSummary? in
-            if Task.isCancelled { return nil }
-            guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
-                return nil
-            }
-            do {
-                let reader = try AVAssetReader(asset: asset)
-                let outputSettings: [String: Any] = [
-                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-                ]
-                let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
-                output.alwaysCopiesSampleData = false
-                reader.add(output)
-                guard reader.startReading() else {
-                    return nil
-                }
-
-                var config = VideoPickerScoring.defaultConfig()
-                config.log_frame_details = 1
-                let scorer = try VideoPickerScoring(config: config)
-
-                let chunkSize = 24
-                var frames: [FrameInput] = []
-                frames.reserveCapacity(chunkSize)
-                var totalFrames = 0
-                var scoreSums: [String: Float] = [:]
-                var rawSums: [String: Float] = [:]
-
-                func merge(_ result: VideoQualityAggregate, frameCount: Int) {
-                    let weight = Float(frameCount)
-                    totalFrames += frameCount
-                    for item in result.mean {
-                        scoreSums[item.id, default: 0] += item.score * weight
-                        rawSums[item.id, default: 0] += item.raw * weight
-                    }
-                }
-
-                func analyzeChunk() throws {
-                    guard !frames.isEmpty else { return }
-                    let result = try scorer.analyze(frames: frames)
-                    merge(result, frameCount: frames.count)
-                    frames.removeAll(keepingCapacity: true)
-                }
-
-                while reader.status == .reading {
-                    if Task.isCancelled {
-                        reader.cancelReading()
-                        return nil
-                    }
-                    autoreleasepool {
-                        guard let sampleBuffer = output.copyNextSampleBuffer(),
-                              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                            return
-                        }
-                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
-                    }
-                    if frames.count >= chunkSize {
-                        try analyzeChunk()
-                    }
-                }
-
-                if reader.status == .failed {
-                    return nil
-                }
-
-                try analyzeChunk()
-
-                guard totalFrames > 0 else {
-                    NSLog("VideoPickerScoring skipped: no frames extracted")
-                    return nil
-                }
-
-                let orderedIds = scoreSums.keys.sorted()
-                let meanItems = orderedIds.map { id -> VideoQualityItem in
-                    let meanScore = (scoreSums[id] ?? 0) / Float(totalFrames)
-                    let meanRaw = (rawSums[id] ?? 0) / Float(totalFrames)
-                    return VideoQualityItem(id: id, score: meanScore, raw: meanRaw)
-                }
-                NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
-                let score = Self.weightedScore(from: meanItems, mode: mode)
-                return ScoringSummary(items: meanItems, score: score)
-            } catch {
-                if case let VideoPickerScoringError.analyzeFailed(code) = error {
-                    let message = Self.videoPickerScoringErrorMessage(for: code)
-                    NSLog(
-                        "VideoPickerScoring analyze failed: code=%d (%@)",
-                        code,
-                        message
-                    )
-                } else {
-                    NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
-                }
-                return nil
-            }
-        }
-        weightedScoreTask = summaryTask
-        let summary = await summaryTask.value
-        weightedScoreTask = nil
-
+    private nonisolated static func computeWeightedScore(from asset: AVAsset, mode: ScoringMode) async -> Int? {
         if Task.isCancelled { return nil }
-        guard let summary else {
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
             return nil
         }
-        logScoringDetails(items: summary.items, weightedScore: summary.score, mode: mode)
-        return summary.score
-#else
-        return nil
-#endif
-    }
+        do {
+            let reader = try AVAssetReader(asset: asset)
+            let outputSettings: [String: Any] = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ]
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+            output.alwaysCopiesSampleData = false
+            reader.add(output)
+            guard reader.startReading() else {
+                return nil
+            }
 
-#if canImport(VideoPickerScoring)
-    private struct ScoringSummary {
-        let items: [VideoQualityItem]
-        let score: Int?
+            var config = VideoPickerScoring.defaultConfig()
+            config.log_frame_details = 1
+            let scorer = try VideoPickerScoring(config: config)
+
+            let chunkSize = 24
+            var frames: [FrameInput] = []
+            frames.reserveCapacity(chunkSize)
+            var totalFrames = 0
+            var scoreSums: [String: Float] = [:]
+            var rawSums: [String: Float] = [:]
+
+            func merge(_ result: VideoQualityAggregate, frameCount: Int) {
+                let weight = Float(frameCount)
+                totalFrames += frameCount
+                for item in result.mean {
+                    scoreSums[item.id, default: 0] += item.score * weight
+                    rawSums[item.id, default: 0] += item.raw * weight
+                }
+            }
+
+            func analyzeChunk() throws {
+                guard !frames.isEmpty else { return }
+                let result = try scorer.analyze(frames: frames)
+                merge(result, frameCount: frames.count)
+                frames.removeAll(keepingCapacity: true)
+            }
+
+            while reader.status == .reading {
+                if Task.isCancelled {
+                    reader.cancelReading()
+                    return nil
+                }
+                autoreleasepool {
+                    guard let sampleBuffer = output.copyNextSampleBuffer(),
+                          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                        return
+                    }
+                    let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                    frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
+                }
+                if frames.count >= chunkSize {
+                    try analyzeChunk()
+                }
+            }
+
+            if reader.status == .failed {
+                return nil
+            }
+
+            try analyzeChunk()
+
+            guard totalFrames > 0 else {
+                NSLog("VideoPickerScoring skipped: no frames extracted")
+                return nil
+            }
+
+            let orderedIds = scoreSums.keys.sorted()
+            let meanItems = orderedIds.map { id -> VideoQualityItem in
+                let meanScore = (scoreSums[id] ?? 0) / Float(totalFrames)
+                let meanRaw = (rawSums[id] ?? 0) / Float(totalFrames)
+                return VideoQualityItem(id: id, score: meanScore, raw: meanRaw)
+            }
+            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
+            let score = Self.weightedScore(from: meanItems, mode: mode)
+            Self.logScoringDetails(items: meanItems, weightedScore: score, mode: mode)
+            return score
+        } catch {
+            if case let VideoPickerScoringError.analyzeFailed(code) = error {
+                let message = Self.videoPickerScoringErrorMessage(for: code)
+                NSLog(
+                    "VideoPickerScoring analyze failed: code=%d (%@)",
+                    code,
+                    message
+                )
+            } else {
+                NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
+            }
+            return nil
+        }
     }
 #endif
 
@@ -371,7 +372,7 @@ final class VideoScoringViewModel: ObservableObject {
         return Int((total * 100).rounded())
     }
 
-    private func logScoringDetails(items: [VideoQualityItem], weightedScore: Int?, mode: ScoringMode) {
+    private nonisolated static func logScoringDetails(items: [VideoQualityItem], weightedScore: Int?, mode: ScoringMode) {
         let detailString = items
             .map {
                 let scoreText = String(format: "%.3f", $0.score)
