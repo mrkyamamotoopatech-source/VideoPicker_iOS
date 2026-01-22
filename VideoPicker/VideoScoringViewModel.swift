@@ -189,10 +189,13 @@ final class VideoScoringViewModel: ObservableObject {
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
         do {
-            var config = VideoPickerScoring.defaultConfig()
-            config.max_frames = 0
-            config.log_frame_details = 1
-            guard let result = try await analyzeInBatches(from: asset, config: config) else {
+            let maxFrames = 0
+            let logFrameDetails = true
+            guard let result = try await analyzeInBatches(
+                from: asset,
+                maxFrames: maxFrames,
+                logFrameDetails: logFrameDetails
+            ) else {
                 NSLog("VideoPickerScoring skipped: no frames extracted")
                 return nil
             }
@@ -227,110 +230,105 @@ final class VideoScoringViewModel: ObservableObject {
         var worstRaw: Float
     }
 
-    private func analyzeInBatches(from asset: AVAsset, config: VpConfig) async throws -> VideoQualityAggregate? {
-        try await Task.detached { [config] in
+    private func analyzeInBatches(
+        from asset: AVAsset,
+        maxFrames: Int,
+        logFrameDetails: Bool
+    ) async throws -> VideoQualityAggregate? {
+        return try await Task.detached { [maxFrames, logFrameDetails] in
             guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
                 return nil
             }
-            let maxFrames = config.max_frames > 0 ? Int(config.max_frames) : Int.max
+            let frameLimit = maxFrames > 0 ? maxFrames : Int.max
             let batchSize = 24
+            var config = VideoPickerScoring.defaultConfig()
+            config.max_frames = 0
+            config.log_frame_details = logFrameDetails ? 1 : 0
             let scorer = try VideoPickerScoring(config: config)
             var accumulators: [String: MetricAccumulator] = [:]
             var totalFrames = 0
 
-            do {
-                let reader = try AVAssetReader(asset: asset)
-                let outputSettings: [String: Any] = [
-                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-                ]
-                let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
-                output.alwaysCopiesSampleData = false
-                reader.add(output)
-                guard reader.startReading() else {
-                    return nil
-                }
-
-                var frames: [FrameInput] = []
-                frames.reserveCapacity(batchSize)
-
-                func processBatch() throws {
-                    guard !frames.isEmpty else { return }
-                    let batchCount = frames.count
-                    let result = try scorer.analyze(frames: frames)
-                    let worstById = Dictionary(uniqueKeysWithValues: result.worst.map { ($0.id, $0) })
-                    for meanItem in result.mean {
-                        let worstItem = worstById[meanItem.id] ?? meanItem
-                        if var accumulator = accumulators[meanItem.id] {
-                            accumulator.sumScore += Double(meanItem.score) * Double(batchCount)
-                            accumulator.sumRaw += Double(meanItem.raw) * Double(batchCount)
-                            if worstItem.score < accumulator.worstScore {
-                                accumulator.worstScore = worstItem.score
-                                accumulator.worstRaw = worstItem.raw
-                            }
-                            accumulators[meanItem.id] = accumulator
-                        } else {
-                            accumulators[meanItem.id] = MetricAccumulator(
-                                id: meanItem.id,
-                                sumScore: Double(meanItem.score) * Double(batchCount),
-                                sumRaw: Double(meanItem.raw) * Double(batchCount),
-                                worstScore: worstItem.score,
-                                worstRaw: worstItem.raw
-                            )
-                        }
-                    }
-                    totalFrames += batchCount
-                    frames.removeAll(keepingCapacity: true)
-                }
-
-                var batchError: Error?
-                while reader.status == .reading && totalFrames < maxFrames {
-                    autoreleasepool {
-                        guard let sampleBuffer = output.copyNextSampleBuffer(),
-                              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                            return
-                        }
-                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                        frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
-                        if frames.count >= batchSize {
-                            do {
-                                try processBatch()
-                            } catch {
-                                batchError = error
-                                reader.cancelReading()
-                            }
-                        }
-                    }
-                    if batchError != nil {
-                        break
-                    }
-                    if reader.status == .failed {
-                        return nil
-                    }
-                }
-
-                if let batchError {
-                    throw batchError
-                }
-
-                try processBatch()
-                guard totalFrames > 0 else {
-                    return nil
-                }
-
-                let meanItems = accumulators.values.sorted { $0.id < $1.id }.map { item in
-                    VideoQualityItem(
-                        id: item.id,
-                        score: Float(item.sumScore / Double(totalFrames)),
-                        raw: Float(item.sumRaw / Double(totalFrames))
-                    )
-                }
-                let worstItems = accumulators.values.sorted { $0.id < $1.id }.map { item in
-                    VideoQualityItem(id: item.id, score: item.worstScore, raw: item.worstRaw)
-                }
-                return VideoQualityAggregate(mean: meanItems, worst: worstItems)
-            } catch {
+            let reader = try AVAssetReader(asset: asset)
+            let outputSettings: [String: Any] = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ]
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+            output.alwaysCopiesSampleData = false
+            reader.add(output)
+            guard reader.startReading() else {
                 return nil
             }
+
+            var frames: [FrameInput] = []
+            frames.reserveCapacity(batchSize)
+
+            func processBatch() throws {
+                guard !frames.isEmpty else { return }
+                let batchCount = frames.count
+                let result = try scorer.analyze(frames: frames)
+                let worstById = Dictionary(uniqueKeysWithValues: result.worst.map { ($0.id, $0) })
+                for meanItem in result.mean {
+                    let worstItem = worstById[meanItem.id] ?? meanItem
+                    if var accumulator = accumulators[meanItem.id] {
+                        accumulator.sumScore += Double(meanItem.score) * Double(batchCount)
+                        accumulator.sumRaw += Double(meanItem.raw) * Double(batchCount)
+                        if worstItem.score < accumulator.worstScore {
+                            accumulator.worstScore = worstItem.score
+                            accumulator.worstRaw = worstItem.raw
+                        }
+                        accumulators[meanItem.id] = accumulator
+                    } else {
+                        accumulators[meanItem.id] = MetricAccumulator(
+                            id: meanItem.id,
+                            sumScore: Double(meanItem.score) * Double(batchCount),
+                            sumRaw: Double(meanItem.raw) * Double(batchCount),
+                            worstScore: worstItem.score,
+                            worstRaw: worstItem.raw
+                        )
+                    }
+                }
+                totalFrames += batchCount
+                frames.removeAll(keepingCapacity: true)
+            }
+
+            while reader.status == .reading && totalFrames < frameLimit {
+                var frameInput: FrameInput?
+                autoreleasepool {
+                    guard let sampleBuffer = output.copyNextSampleBuffer(),
+                          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                        return
+                    }
+                    let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                    frameInput = FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp)
+                }
+                guard let frameInput else {
+                    break
+                }
+                frames.append(frameInput)
+                if frames.count >= batchSize {
+                    try processBatch()
+                }
+                if reader.status == .failed {
+                    return nil
+                }
+            }
+
+            try processBatch()
+            guard totalFrames > 0 else {
+                return nil
+            }
+
+            let meanItems = accumulators.values.sorted { $0.id < $1.id }.map { item in
+                VideoQualityItem(
+                    id: item.id,
+                    score: Float(item.sumScore / Double(totalFrames)),
+                    raw: Float(item.sumRaw / Double(totalFrames))
+                )
+            }
+            let worstItems = accumulators.values.sorted { $0.id < $1.id }.map { item in
+                VideoQualityItem(id: item.id, score: item.worstScore, raw: item.worstRaw)
+            }
+            return VideoQualityAggregate(mean: meanItems, worst: worstItems)
         }.value
     }
 #endif
