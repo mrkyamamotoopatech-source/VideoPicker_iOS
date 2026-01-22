@@ -345,6 +345,9 @@ final class VideoScoringViewModel: ObservableObject {
             throw NSError(domain: "VideoPicker", code: 6, userInfo: [NSLocalizedDescriptionKey: "Video track missing"])
         }
 
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let audioTrack = audioTracks.first
+
         let preferredTransform = try await videoTrack.load(.preferredTransform)
         let naturalSize = try await videoTrack.load(.naturalSize)
         let targetSize = CGSize(width: 1920, height: 1080)
@@ -369,6 +372,28 @@ final class VideoScoringViewModel: ObservableObject {
         }
         reader.add(readerOutput)
 
+        let audioOutput: AVAssetReaderTrackOutput?
+        if let audioTrack {
+            let output = AVAssetReaderTrackOutput(
+                track: audioTrack,
+                outputSettings: [
+                    AVFormatIDKey: kAudioFormatLinearPCM,
+                    AVLinearPCMIsNonInterleaved: false,
+                    AVLinearPCMIsFloatKey: false,
+                    AVLinearPCMBitDepthKey: 16,
+                    AVLinearPCMIsBigEndianKey: false
+                ]
+            )
+            output.alwaysCopiesSampleData = false
+            guard reader.canAdd(output) else {
+                throw NSError(domain: "VideoPicker", code: 11, userInfo: [NSLocalizedDescriptionKey: "Audio reader output unavailable"])
+            }
+            reader.add(output)
+            audioOutput = output
+        } else {
+            audioOutput = nil
+        }
+
         let compressionProperties: [String: Any] = [
             AVVideoAverageBitRateKey: 6_000_000,
             AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
@@ -388,9 +413,44 @@ final class VideoScoringViewModel: ObservableObject {
         }
         writer.add(writerInput)
 
+        let audioInput: AVAssetWriterInput?
+        if audioTrack != nil {
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVNumberOfChannelsKey: 2,
+                AVSampleRateKey: 44_100,
+                AVEncoderBitRateKey: 128_000
+            ]
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            input.expectsMediaDataInRealTime = false
+            guard writer.canAdd(input) else {
+                throw NSError(domain: "VideoPicker", code: 12, userInfo: [NSLocalizedDescriptionKey: "Audio writer input unavailable"])
+            }
+            writer.add(input)
+            audioInput = input
+        } else {
+            audioInput = nil
+        }
+
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let queue = DispatchQueue(label: "videopicker.scoring.transcode")
             var didFinish = false
+            var videoFinished = false
+            var audioFinished = audioInput == nil
+
+            func finishIfReady() {
+                guard !didFinish, videoFinished, audioFinished else { return }
+                didFinish = true
+                writer.finishWriting {
+                    if let error = writer.error {
+                        continuation.resume(throwing: error)
+                    } else if reader.status == .failed {
+                        continuation.resume(throwing: reader.error ?? NSError(domain: "VideoPicker", code: 10))
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            }
 
             writer.startWriting()
             writer.startSession(atSourceTime: .zero)
@@ -402,25 +462,43 @@ final class VideoScoringViewModel: ObservableObject {
                     if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
                         if !writerInput.append(sampleBuffer) {
                             didFinish = true
+                            videoFinished = true
                             reader.cancelReading()
                             writerInput.markAsFinished()
+                            audioInput?.markAsFinished()
                             writer.cancelWriting()
                             continuation.resume(
                                 throwing: writer.error ?? NSError(domain: "VideoPicker", code: 9)
                             )
                         }
                     } else {
-                        didFinish = true
+                        videoFinished = true
                         writerInput.markAsFinished()
-                        writer.finishWriting {
-                            if let error = writer.error {
-                                continuation.resume(throwing: error)
-                            } else if reader.status == .failed {
-                                continuation.resume(throwing: reader.error ?? NSError(domain: "VideoPicker", code: 10))
-                            } else {
-                                continuation.resume(returning: ())
-                            }
+                        finishIfReady()
+                        break
+                    }
+                }
+            }
+
+            audioInput?.requestMediaDataWhenReady(on: queue) {
+                guard !didFinish, let audioInput, let audioOutput else { return }
+                while audioInput.isReadyForMoreMediaData {
+                    if let sampleBuffer = audioOutput.copyNextSampleBuffer() {
+                        if !audioInput.append(sampleBuffer) {
+                            didFinish = true
+                            audioFinished = true
+                            reader.cancelReading()
+                            writerInput.markAsFinished()
+                            audioInput.markAsFinished()
+                            writer.cancelWriting()
+                            continuation.resume(
+                                throwing: writer.error ?? NSError(domain: "VideoPicker", code: 13)
+                            )
                         }
+                    } else {
+                        audioFinished = true
+                        audioInput.markAsFinished()
+                        finishIfReady()
                         break
                     }
                 }
