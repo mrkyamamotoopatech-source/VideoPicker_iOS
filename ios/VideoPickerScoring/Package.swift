@@ -25,12 +25,18 @@ let package = Package(
             cxxSettings: [
                 .headerSearchPath("include"),
                 .unsafeFlags(["-std=c++17"])
+            ],
+            linkerSettings: [
+                .linkedLibrary("c++")
             ]
         ),
         .target(
             name: "VideoPickerScoring",
             dependencies: ["VideoPickerScoringCore"],
-            path: "Sources/VideoPickerScoring"
+            path: "Sources/VideoPickerScoring",
+            linkerSettings: [
+                .linkedLibrary("c++")
+            ]
         )
     ]
 )
