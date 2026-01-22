@@ -189,15 +189,13 @@ final class VideoScoringViewModel: ObservableObject {
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
         do {
-            let frames = await loadFrameInputs(from: asset, maxFrames: 24)
-            guard !frames.isEmpty else {
+            var config = VideoPickerScoring.defaultConfig()
+            config.max_frames = 0
+            config.log_frame_details = 1
+            guard let result = try await analyzeInBatches(from: asset, config: config) else {
                 NSLog("VideoPickerScoring skipped: no frames extracted")
                 return nil
             }
-            var config = VideoPickerScoring.defaultConfig()
-            config.log_frame_details = 1
-            let scorer = try VideoPickerScoring(config: config)
-            let result = try scorer.analyze(frames: frames)
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
@@ -221,11 +219,25 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 #if canImport(VideoPickerScoring)
-    private func loadFrameInputs(from asset: AVAsset, maxFrames: Int) async -> [FrameInput] {
-        await Task.detached {
+    private struct MetricAccumulator {
+        var id: String
+        var sumScore: Double
+        var sumRaw: Double
+        var worstScore: Float
+        var worstRaw: Float
+    }
+
+    private func analyzeInBatches(from asset: AVAsset, config: VpConfig) async throws -> VideoQualityAggregate? {
+        try await Task.detached { [config] in
             guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
-                return []
+                return nil
             }
+            let maxFrames = config.max_frames > 0 ? Int(config.max_frames) : Int.max
+            let batchSize = 24
+            let scorer = try VideoPickerScoring(config: config)
+            var accumulators: [String: MetricAccumulator] = [:]
+            var totalFrames = 0
+
             do {
                 let reader = try AVAssetReader(asset: asset)
                 let outputSettings: [String: Any] = [
@@ -235,12 +247,43 @@ final class VideoScoringViewModel: ObservableObject {
                 output.alwaysCopiesSampleData = false
                 reader.add(output)
                 guard reader.startReading() else {
-                    return []
+                    return nil
                 }
 
                 var frames: [FrameInput] = []
-                frames.reserveCapacity(maxFrames)
-                while reader.status == .reading && frames.count < maxFrames {
+                frames.reserveCapacity(batchSize)
+
+                func processBatch() throws {
+                    guard !frames.isEmpty else { return }
+                    let batchCount = frames.count
+                    let result = try scorer.analyze(frames: frames)
+                    let worstById = Dictionary(uniqueKeysWithValues: result.worst.map { ($0.id, $0) })
+                    for meanItem in result.mean {
+                        let worstItem = worstById[meanItem.id] ?? meanItem
+                        if var accumulator = accumulators[meanItem.id] {
+                            accumulator.sumScore += Double(meanItem.score) * Double(batchCount)
+                            accumulator.sumRaw += Double(meanItem.raw) * Double(batchCount)
+                            if worstItem.score < accumulator.worstScore {
+                                accumulator.worstScore = worstItem.score
+                                accumulator.worstRaw = worstItem.raw
+                            }
+                            accumulators[meanItem.id] = accumulator
+                        } else {
+                            accumulators[meanItem.id] = MetricAccumulator(
+                                id: meanItem.id,
+                                sumScore: Double(meanItem.score) * Double(batchCount),
+                                sumRaw: Double(meanItem.raw) * Double(batchCount),
+                                worstScore: worstItem.score,
+                                worstRaw: worstItem.raw
+                            )
+                        }
+                    }
+                    totalFrames += batchCount
+                    frames.removeAll(keepingCapacity: true)
+                }
+
+                var batchError: Error?
+                while reader.status == .reading && totalFrames < maxFrames {
                     autoreleasepool {
                         guard let sampleBuffer = output.copyNextSampleBuffer(),
                               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -248,11 +291,45 @@ final class VideoScoringViewModel: ObservableObject {
                         }
                         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                         frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
+                        if frames.count >= batchSize {
+                            do {
+                                try processBatch()
+                            } catch {
+                                batchError = error
+                                reader.cancelReading()
+                            }
+                        }
+                    }
+                    if batchError != nil {
+                        break
+                    }
+                    if reader.status == .failed {
+                        return nil
                     }
                 }
-                return frames
+
+                if let batchError {
+                    throw batchError
+                }
+
+                try processBatch()
+                guard totalFrames > 0 else {
+                    return nil
+                }
+
+                let meanItems = accumulators.values.sorted { $0.id < $1.id }.map { item in
+                    VideoQualityItem(
+                        id: item.id,
+                        score: Float(item.sumScore / Double(totalFrames)),
+                        raw: Float(item.sumRaw / Double(totalFrames))
+                    )
+                }
+                let worstItems = accumulators.values.sorted { $0.id < $1.id }.map { item in
+                    VideoQualityItem(id: item.id, score: item.worstScore, raw: item.worstRaw)
+                }
+                return VideoQualityAggregate(mean: meanItems, worst: worstItems)
             } catch {
-                return []
+                return nil
             }
         }.value
     }
