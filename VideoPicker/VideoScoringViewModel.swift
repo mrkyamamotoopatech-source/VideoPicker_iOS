@@ -299,7 +299,7 @@ final class VideoScoringViewModel: ObservableObject {
                 return nil
             }
         }
-        let summary = await summaryTask.value
+        let summary = summaryTask.value
 
         guard let summary else {
             return nil
