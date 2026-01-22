@@ -1,9 +1,7 @@
 #ifndef VP_METRICS_H
 #define VP_METRICS_H
 
-#include <cstdint>
-#include <string>
-#include <vector>
+#include <stdint.h>
 
 #include "vp_analyzer.h"
 
