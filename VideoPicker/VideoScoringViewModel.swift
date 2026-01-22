@@ -194,7 +194,9 @@ final class VideoScoringViewModel: ObservableObject {
                 NSLog("VideoPickerScoring skipped: no frames extracted")
                 return nil
             }
-            let scorer = try VideoPickerScoring()
+            var config = VideoPickerScoring.defaultConfig()
+            config.log_frame_details = 1
+            let scorer = try VideoPickerScoring(config: config)
             let result = try scorer.analyze(frames: frames)
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)

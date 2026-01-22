@@ -47,6 +47,7 @@ typedef struct {
   int32_t max_frames;
   float fps;
   VpNormalize normalize;
+  int32_t log_frame_details;
   VpThreshold thresholds[VP_MAX_ITEMS];
 } VpConfig;
 

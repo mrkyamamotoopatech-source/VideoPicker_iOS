@@ -162,6 +162,10 @@ class AnalyzerImpl {
         float raw = metrics_[metric_index].compute(frame, prev_ptr);
         float score = normalize_score(raw, metrics_[metric_index].threshold);
         aggregates[metric_index].update(raw, score);
+        if (config_.log_frame_details != 0) {
+          std::fprintf(stderr, "vp_scoring frame=%d metric=%s score=%.6f raw=%.6f\n", i,
+                       metric_id_to_string(metrics_[metric_index].id), score, raw);
+        }
       }
 
       previous_gray.swap(current_gray);
@@ -216,6 +220,7 @@ void vp_default_config(VpConfig* config) {
   config->max_frames = 300;
   config->fps = 5.0f;
   config->normalize = {360, 0};
+  config->log_frame_details = 0;
   for (int i = 0; i < VP_MAX_ITEMS; ++i) {
     config->thresholds[i] = {0.0f, 0.0f};
   }
