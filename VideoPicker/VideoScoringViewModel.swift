@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import CoreMedia
 import Photos
 import UIKit
 #if canImport(VideoPickerScoring)
@@ -194,10 +195,10 @@ final class VideoScoringViewModel: ObservableObject {
         }
         do {
             let scorer = try VideoPickerScoring()
-            let result = try scorer.analyze(url: urlAsset.url)
-            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
-            let score = weightedScore(from: result.mean, mode: scoringMode)
-            logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
+            let meanItems = try await analyzeVideo(for: urlAsset, scorer: scorer)
+            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
+            let score = weightedScore(from: meanItems, mode: scoringMode)
+            logScoringDetails(items: meanItems, weightedScore: score, mode: scoringMode)
             return score
         } catch {
             if case let VideoPickerScoringError.analyzeFailed(code) = error {
@@ -217,6 +218,386 @@ final class VideoScoringViewModel: ObservableObject {
         return nil
 #endif
     }
+
+#if canImport(VideoPickerScoring)
+    private func analyzeVideo(for asset: AVURLAsset, scorer: VideoPickerScoring) async throws -> [VideoQualityItem] {
+        await logAssetDetails(asset, context: "initial")
+        if let exportURL = try await exportToH264IfNeeded(asset: asset, force: false) {
+            defer { try? FileManager.default.removeItem(at: exportURL) }
+            NSLog("VideoPickerScoring analyze uses transcoded asset: %@", exportURL.path)
+            do {
+                return try scorer.analyze(url: exportURL).mean
+            } catch {
+                NSLog("VideoPickerScoring analyze failed on transcoded asset: %@ error=%@", exportURL.path, "\(error)")
+                throw error
+            }
+        }
+
+        do {
+            return try scorer.analyze(url: asset.url).mean
+        } catch {
+            NSLog("VideoPickerScoring analyze failed on original asset: %@ error=%@", asset.url.path, "\(error)")
+            if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5,
+               let exportURL = try? await exportToH264IfNeeded(asset: asset, force: true) {
+                defer { try? FileManager.default.removeItem(at: exportURL) }
+                NSLog("VideoPickerScoring analyze retry with transcoded asset: %@", exportURL.path)
+                do {
+                    return try scorer.analyze(url: exportURL).mean
+                } catch {
+                    NSLog(
+                        "VideoPickerScoring analyze failed after transcode retry: %@ error=%@",
+                        exportURL.path,
+                        "\(error)"
+                    )
+                    throw error
+                }
+            }
+            throw error
+        }
+    }
+
+    private func exportToH264IfNeeded(asset: AVAsset, force: Bool) async throws -> URL? {
+        if !force, !(try await needsTranscode(asset: asset)) {
+            return nil
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("videopicker-transcode-\(UUID().uuidString).mp4")
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+
+        do {
+            let presetSucceeded = try await exportWithPreset(asset: asset, outputURL: outputURL)
+            if !presetSucceeded {
+                try await transcodeForScoring(asset: asset, outputURL: outputURL)
+            }
+            await logExportedAssetDetails(outputURL)
+        } catch {
+            NSLog(
+                "VideoPickerScoring export failed: error=%@ output=%@",
+                "\(error)",
+                outputURL.path
+            )
+            throw error
+        }
+
+        return outputURL
+    }
+
+    private func needsTranscode(asset: AVAsset) async throws -> Bool {
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard let track = tracks.first else {
+            return false
+        }
+        let formatDescriptions = try await track.load(.formatDescriptions)
+        guard let formatDescription = formatDescriptions.first else {
+            return false
+        }
+        let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
+        return codecType != kCMVideoCodecType_H264
+    }
+
+    private func logAssetDetails(_ asset: AVURLAsset, context: String) async {
+        let videoTracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
+        let audioTracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
+        let duration = (try? await asset.load(.duration)) ?? .zero
+        NSLog(
+            "VideoPickerScoring asset details (%@): url=%@ duration=%.2fs videoTracks=%d audioTracks=%d",
+            context,
+            asset.url.path,
+            duration.seconds,
+            videoTracks.count,
+            audioTracks.count
+        )
+
+        if let track = videoTracks.first {
+            let formatDescriptions = (try? await track.load(.formatDescriptions)) ?? []
+            if let formatDescription = formatDescriptions.first {
+                let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
+                let fourCC = fourCCString(for: codecType)
+                let dimensions = (try? await track.load(.naturalSize)) ?? .zero
+                let nominalFrameRate = (try? await track.load(.nominalFrameRate)) ?? 0
+                NSLog(
+                    "VideoPickerScoring asset details (%@): codec=%@ size=%.0fx%.0f fps=%.2f",
+                    context,
+                    fourCC,
+                    dimensions.width,
+                    dimensions.height,
+                    nominalFrameRate
+                )
+            } else {
+                NSLog("VideoPickerScoring asset details (%@): formatDescription missing", context)
+            }
+        } else {
+            NSLog("VideoPickerScoring asset details (%@): no video track", context)
+        }
+    }
+
+    private func logExportedAssetDetails(_ url: URL) async {
+        let exportedAsset = AVURLAsset(url: url)
+        await logAssetDetails(exportedAsset, context: "transcoded")
+    }
+
+    private func exportWithPreset(asset: AVAsset, outputURL: URL) async throws -> Bool {
+        let presetName = AVAssetExportPresetMediumQuality
+        let compatiblePresets = AVAssetExportSession.exportPresets(compatibleWith: asset)
+        guard compatiblePresets.contains(presetName) else {
+            NSLog("VideoPickerScoring export preset unavailable: %@", presetName)
+            return false
+        }
+
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: presetName) else {
+            throw NSError(domain: "VideoPicker", code: 15, userInfo: [NSLocalizedDescriptionKey: "Export session failed"])
+        }
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        if #available(iOS 18, *) {
+            try await exportSession.export(to: outputURL, as: .mp4)
+        } else {
+            try await exportLegacy(exportSession)
+        }
+        return true
+    }
+
+    @available(iOS, deprecated: 18.0)
+    private func exportLegacy(_ exportSession: AVAssetExportSession) async throws {
+        struct ExportSessionBox: @unchecked Sendable {
+            let session: AVAssetExportSession
+        }
+        let sessionBox = ExportSessionBox(session: exportSession)
+
+        try await withCheckedThrowingContinuation { continuation in
+            sessionBox.session.exportAsynchronously {
+                switch sessionBox.session.status {
+                case .completed:
+                    continuation.resume(returning: ())
+                case .failed:
+                    continuation.resume(throwing: sessionBox.session.error ?? NSError(domain: "VideoPicker", code: 3))
+                case .cancelled:
+                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 4))
+                default:
+                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 5))
+                }
+            }
+        }
+    }
+
+    private func transcodeForScoring(asset: AVAsset, outputURL: URL) async throws {
+        let reader = try AVAssetReader(asset: asset)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else {
+            throw NSError(domain: "VideoPicker", code: 6, userInfo: [NSLocalizedDescriptionKey: "Video track missing"])
+        }
+
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let audioTrack = audioTracks.first
+
+        let preferredTransform = try await videoTrack.load(.preferredTransform)
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let targetSize = CGSize(width: 1920, height: 1080)
+        let composition = buildVideoComposition(
+            track: videoTrack,
+            preferredTransform: preferredTransform,
+            naturalSize: naturalSize,
+            targetSize: targetSize,
+            duration: try await asset.load(.duration)
+        )
+
+        let readerOutput = AVAssetReaderVideoCompositionOutput(
+            videoTracks: [videoTrack],
+            videoSettings: [
+                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
+            ]
+        )
+        readerOutput.videoComposition = composition
+        readerOutput.alwaysCopiesSampleData = false
+        guard reader.canAdd(readerOutput) else {
+            throw NSError(domain: "VideoPicker", code: 7, userInfo: [NSLocalizedDescriptionKey: "Reader output unavailable"])
+        }
+        reader.add(readerOutput)
+
+        let audioOutput: AVAssetReaderTrackOutput?
+        if let audioTrack {
+            let output = AVAssetReaderTrackOutput(
+                track: audioTrack,
+                outputSettings: [
+                    AVFormatIDKey: kAudioFormatLinearPCM,
+                    AVLinearPCMIsNonInterleaved: false,
+                    AVLinearPCMIsFloatKey: false,
+                    AVLinearPCMBitDepthKey: 16,
+                    AVLinearPCMIsBigEndianKey: false
+                ]
+            )
+            output.alwaysCopiesSampleData = false
+            guard reader.canAdd(output) else {
+                throw NSError(domain: "VideoPicker", code: 11, userInfo: [NSLocalizedDescriptionKey: "Audio reader output unavailable"])
+            }
+            reader.add(output)
+            audioOutput = output
+        } else {
+            audioOutput = nil
+        }
+
+        let compressionProperties: [String: Any] = [
+            AVVideoAverageBitRateKey: 3_000_000,
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
+            AVVideoExpectedSourceFrameRateKey: 30,
+            AVVideoMaxKeyFrameIntervalKey: 30
+        ]
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: targetSize.width,
+            AVVideoHeightKey: targetSize.height,
+            AVVideoCompressionPropertiesKey: compressionProperties
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+        guard writer.canAdd(writerInput) else {
+            throw NSError(domain: "VideoPicker", code: 8, userInfo: [NSLocalizedDescriptionKey: "Writer input unavailable"])
+        }
+        writer.add(writerInput)
+
+        let audioInput: AVAssetWriterInput?
+        if audioTrack != nil {
+            let audioSettings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVNumberOfChannelsKey: 2,
+                AVSampleRateKey: 44_100,
+                AVEncoderBitRateKey: 128_000
+            ]
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            input.expectsMediaDataInRealTime = false
+            guard writer.canAdd(input) else {
+                throw NSError(domain: "VideoPicker", code: 12, userInfo: [NSLocalizedDescriptionKey: "Audio writer input unavailable"])
+            }
+            writer.add(input)
+            audioInput = input
+        } else {
+            audioInput = nil
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            let queue = DispatchQueue(label: "videopicker.scoring.transcode")
+            var didFinish = false
+            var videoFinished = false
+            var audioFinished = audioInput == nil
+
+            func finishIfReady() {
+                guard !didFinish, videoFinished, audioFinished else { return }
+                didFinish = true
+                writer.finishWriting {
+                    if let error = writer.error {
+                        continuation.resume(throwing: error)
+                    } else if reader.status == .failed {
+                        continuation.resume(throwing: reader.error ?? NSError(domain: "VideoPicker", code: 10))
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                }
+            }
+
+            writer.startWriting()
+            writer.startSession(atSourceTime: .zero)
+            reader.startReading()
+
+            writerInput.requestMediaDataWhenReady(on: queue) {
+                guard !didFinish else { return }
+                while writerInput.isReadyForMoreMediaData {
+                    if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+                        if !writerInput.append(sampleBuffer) {
+                            didFinish = true
+                            videoFinished = true
+                            reader.cancelReading()
+                            writerInput.markAsFinished()
+                            audioInput?.markAsFinished()
+                            writer.cancelWriting()
+                            continuation.resume(
+                                throwing: writer.error ?? NSError(domain: "VideoPicker", code: 9)
+                            )
+                        }
+                    } else {
+                        videoFinished = true
+                        writerInput.markAsFinished()
+                        finishIfReady()
+                        break
+                    }
+                }
+            }
+
+            audioInput?.requestMediaDataWhenReady(on: queue) {
+                guard !didFinish, let audioInput, let audioOutput else { return }
+                while audioInput.isReadyForMoreMediaData {
+                    if let sampleBuffer = audioOutput.copyNextSampleBuffer() {
+                        if !audioInput.append(sampleBuffer) {
+                            didFinish = true
+                            audioFinished = true
+                            reader.cancelReading()
+                            writerInput.markAsFinished()
+                            audioInput.markAsFinished()
+                            writer.cancelWriting()
+                            continuation.resume(
+                                throwing: writer.error ?? NSError(domain: "VideoPicker", code: 13)
+                            )
+                        }
+                    } else {
+                        audioFinished = true
+                        audioInput.markAsFinished()
+                        finishIfReady()
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    private func buildVideoComposition(
+        track: AVAssetTrack,
+        preferredTransform: CGAffineTransform,
+        naturalSize: CGSize,
+        targetSize: CGSize,
+        duration: CMTime
+    ) -> AVMutableVideoComposition {
+        let transformedSize = naturalSize.applying(preferredTransform)
+        let sourceSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+        let targetRect = CGRect(origin: .zero, size: targetSize)
+        let fittedRect = AVMakeRect(aspectRatio: sourceSize, insideRect: targetRect)
+        let scale = fittedRect.width / sourceSize.width
+        var transform = preferredTransform
+        transform = transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+        transform = transform.concatenating(
+            CGAffineTransform(translationX: fittedRect.origin.x / scale, y: fittedRect.origin.y / scale)
+        )
+
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+        layerInstruction.setTransform(transform, at: .zero)
+
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
+        instruction.layerInstructions = [layerInstruction]
+
+        let composition = AVMutableVideoComposition()
+        composition.renderSize = targetSize
+        composition.frameDuration = CMTime(value: 1, timescale: 30)
+        composition.instructions = [instruction]
+        return composition
+    }
+
+    private func fourCCString(for codecType: FourCharCode) -> String {
+        let chars: [CChar] = [
+            CChar((codecType >> 24) & 0xFF),
+            CChar((codecType >> 16) & 0xFF),
+            CChar((codecType >> 8) & 0xFF),
+            CChar(codecType & 0xFF),
+            0
+        ]
+        return String(cString: chars)
+    }
+#endif
 
 #if canImport(VideoPickerScoring)
     private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
