@@ -267,9 +267,7 @@ final class VideoScoringViewModel: ObservableObject {
                 return nil
             }
 
-            var config = VideoPickerScoring.defaultConfig()
-            config.log_frame_details = 1
-            let scorer = try VideoPickerScoring(config: config)
+            let scorer = try VideoPickerScoring()
 
             let chunkSize = 24
             var frames: [FrameInput] = []

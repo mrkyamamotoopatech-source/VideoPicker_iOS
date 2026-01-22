@@ -51,7 +51,7 @@ static float compute_noise_wrapper(const GrayFrame& frame, const GrayFrame*) {
 }
 
 static float compute_person_blur_wrapper(const GrayFrame& frame, const GrayFrame*) {
-  return compute_sharpness(frame);
+  return compute_person_blur(frame);
 }
 
 static VpThreshold threshold_for_metric(const VpConfig& config, VpMetricId id) {
