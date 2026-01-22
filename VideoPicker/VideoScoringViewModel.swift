@@ -300,7 +300,7 @@ final class VideoScoringViewModel: ObservableObject {
 #endif
 
 #if canImport(VideoPickerScoring)
-    private static func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
+    private nonisolated static func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
         let weights: [String: Float]
         switch mode {
         case .person:
@@ -341,7 +341,7 @@ final class VideoScoringViewModel: ObservableObject {
         NSLog("VideoPickerScoring details (mode=%@): %@ weightedScore=%@", "\(mode)", detailString, scoreText)
     }
 
-    private static func videoPickerScoringErrorMessage(for code: Int32) -> String {
+    private nonisolated static func videoPickerScoringErrorMessage(for code: Int32) -> String {
         switch code {
         case 1:
             return "invalid argument"
