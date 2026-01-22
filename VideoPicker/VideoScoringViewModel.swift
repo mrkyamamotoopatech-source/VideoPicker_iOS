@@ -388,7 +388,7 @@ final class VideoScoringViewModel: ObservableObject {
         }
         writer.add(writerInput)
 
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let queue = DispatchQueue(label: "videopicker.scoring.transcode")
             var didFinish = false
 
