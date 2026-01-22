@@ -130,29 +130,6 @@ public final class VideoPickerScoring {
         return Self.aggregate(from: result)
     }
 
-    public static func weightedScore(for aggregate: VideoQualityAggregate) -> Float? {
-        let weights: [String: Float] = [
-            "sharpness": 0.25,
-            "exposure": 0.25,
-            "motion_blur": 0.2,
-            "noise": 0.15,
-            "person_blur": 0.15
-        ]
-        let scoreById = Dictionary(uniqueKeysWithValues: aggregate.mean.map { ($0.id, $0.score) })
-        var weightedSum: Float = 0.0
-        var weightSum: Float = 0.0
-        for (id, weight) in weights {
-            if let score = scoreById[id] {
-                weightedSum += score * weight
-                weightSum += weight
-            }
-        }
-        guard weightSum > 0 else {
-            return nil
-        }
-        return weightedSum / weightSum
-    }
-
     public static func defaultConfig() -> VpConfig {
         var config = VpConfig()
         vp_default_config(&config)

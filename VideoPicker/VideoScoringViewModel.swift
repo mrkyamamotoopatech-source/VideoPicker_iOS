@@ -364,20 +364,22 @@ final class VideoScoringViewModel: ObservableObject {
         case .person:
             weights = [
                 "sharpness": 0.15,
-                "motion_blur": 0.45,
-                "exposure": 0.30,
-                "noise": 0.10
+                "motion_blur": 0.40,
+                "exposure": 0.25,
+                "noise": 0.10,
+                "person_blur": 0.10
             ]
         case .scenery:
             weights = [
-                "sharpness": 0.35,
+                "sharpness": 0.30,
                 "motion_blur": 0.20,
                 "exposure": 0.30,
-                "noise": 0.15
+                "noise": 0.10,
+                "person_blur": 0.10
             ]
         }
         let scores = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.score) })
-        let requiredKeys = ["sharpness", "motion_blur", "exposure", "noise"]
+        let requiredKeys = ["sharpness", "motion_blur", "exposure", "noise", "person_blur"]
         guard requiredKeys.allSatisfy({ scores[$0] != nil }) else { return nil }
 
         let total = weights.reduce(Float(0)) { partial, item in
