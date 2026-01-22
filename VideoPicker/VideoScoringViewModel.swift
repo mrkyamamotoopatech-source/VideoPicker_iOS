@@ -305,7 +305,7 @@ final class VideoScoringViewModel: ObservableObject {
         case 4:
             return "decode error"
         case 5:
-            return "unsupported video or codec"
+            return "unsupported frame input"
         default:
             return "unknown error"
         }
