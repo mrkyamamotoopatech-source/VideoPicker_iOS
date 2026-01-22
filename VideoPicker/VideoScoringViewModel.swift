@@ -225,17 +225,32 @@ final class VideoScoringViewModel: ObservableObject {
         if let exportURL = try await exportToH264IfNeeded(asset: asset, force: false) {
             defer { try? FileManager.default.removeItem(at: exportURL) }
             NSLog("VideoPickerScoring analyze uses transcoded asset: %@", exportURL.path)
-            return try scorer.analyze(url: exportURL).mean
+            do {
+                return try scorer.analyze(url: exportURL).mean
+            } catch {
+                NSLog("VideoPickerScoring analyze failed on transcoded asset: %@ error=%@", exportURL.path, "\(error)")
+                throw error
+            }
         }
 
         do {
             return try scorer.analyze(url: asset.url).mean
         } catch {
+            NSLog("VideoPickerScoring analyze failed on original asset: %@ error=%@", asset.url.path, "\(error)")
             if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5,
                let exportURL = try? await exportToH264IfNeeded(asset: asset, force: true) {
                 defer { try? FileManager.default.removeItem(at: exportURL) }
                 NSLog("VideoPickerScoring analyze retry with transcoded asset: %@", exportURL.path)
-                return try scorer.analyze(url: exportURL).mean
+                do {
+                    return try scorer.analyze(url: exportURL).mean
+                } catch {
+                    NSLog(
+                        "VideoPickerScoring analyze failed after transcode retry: %@ error=%@",
+                        exportURL.path,
+                        "\(error)"
+                    )
+                    throw error
+                }
             }
             throw error
         }
@@ -263,10 +278,22 @@ final class VideoScoringViewModel: ObservableObject {
         exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
 
-        if #available(iOS 18, *) {
-            try await exportSession.export(to: outputURL, as: .mp4)
-        } else {
-            try await exportLegacy(exportSession)
+        do {
+            if #available(iOS 18, *) {
+                try await exportSession.export(to: outputURL, as: .mp4)
+            } else {
+                try await exportLegacy(exportSession)
+            }
+        } catch {
+            let status = exportSession.status.rawValue
+            let errorDescription = exportSession.error?.localizedDescription ?? "unknown"
+            NSLog(
+                "VideoPickerScoring export failed: status=%d error=%@ output=%@",
+                status,
+                errorDescription,
+                outputURL.path
+            )
+            throw error
         }
 
         return outputURL
