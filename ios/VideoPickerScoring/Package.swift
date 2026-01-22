@@ -16,7 +16,16 @@ let package = Package(
         .target(
             name: "VideoPickerScoringCore",
             path: "Sources/VideoPickerScoringCore",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            sources: [
+                "vp_analyzer.cpp",
+                "vp_metrics.cpp",
+                "vp_analyzer_stub.c"
+            ],
+            cxxSettings: [
+                .headerSearchPath("include"),
+                .unsafeFlags(["-std=c++17"])
+            ]
         ),
         .target(
             name: "VideoPickerScoring",
