@@ -7,6 +7,12 @@ public struct VideoQualityItem {
     public let id: String
     public let score: Float
     public let raw: Float
+
+    public init(id: String, score: Float, raw: Float) {
+        self.id = id
+        self.score = score
+        self.raw = raw
+    }
 }
 
 public struct VideoQualityAggregate {
