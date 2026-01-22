@@ -221,8 +221,10 @@ final class VideoScoringViewModel: ObservableObject {
 
 #if canImport(VideoPickerScoring)
     private func analyzeVideo(for asset: AVURLAsset, scorer: VideoPickerScoring) async throws -> [VideoQualityItem] {
+        await logAssetDetails(asset, context: "initial")
         if let exportURL = try await exportToH264IfNeeded(asset: asset, force: false) {
             defer { try? FileManager.default.removeItem(at: exportURL) }
+            NSLog("VideoPickerScoring analyze uses transcoded asset: %@", exportURL.path)
             return try scorer.analyze(url: exportURL).mean
         }
 
@@ -232,6 +234,7 @@ final class VideoScoringViewModel: ObservableObject {
             if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5,
                let exportURL = try? await exportToH264IfNeeded(asset: asset, force: true) {
                 defer { try? FileManager.default.removeItem(at: exportURL) }
+                NSLog("VideoPickerScoring analyze retry with transcoded asset: %@", exportURL.path)
                 return try scorer.analyze(url: exportURL).mean
             }
             throw error
@@ -303,6 +306,53 @@ final class VideoScoringViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func logAssetDetails(_ asset: AVURLAsset, context: String) async {
+        let videoTracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
+        let audioTracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
+        let duration = (try? await asset.load(.duration)) ?? .zero
+        NSLog(
+            "VideoPickerScoring asset details (%@): url=%@ duration=%.2fs videoTracks=%d audioTracks=%d",
+            context,
+            asset.url.path,
+            duration.seconds,
+            videoTracks.count,
+            audioTracks.count
+        )
+
+        if let track = videoTracks.first {
+            let formatDescriptions = (try? await track.load(.formatDescriptions)) ?? []
+            if let formatDescription = formatDescriptions.first {
+                let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
+                let fourCC = fourCCString(for: codecType)
+                let dimensions = (try? await track.load(.naturalSize)) ?? .zero
+                let nominalFrameRate = (try? await track.load(.nominalFrameRate)) ?? 0
+                NSLog(
+                    "VideoPickerScoring asset details (%@): codec=%@ size=%.0fx%.0f fps=%.2f",
+                    context,
+                    fourCC,
+                    dimensions.width,
+                    dimensions.height,
+                    nominalFrameRate
+                )
+            } else {
+                NSLog("VideoPickerScoring asset details (%@): formatDescription missing", context)
+            }
+        } else {
+            NSLog("VideoPickerScoring asset details (%@): no video track", context)
+        }
+    }
+
+    private func fourCCString(for codecType: FourCharCode) -> String {
+        let chars: [CChar] = [
+            CChar((codecType >> 24) & 0xFF),
+            CChar((codecType >> 16) & 0xFF),
+            CChar((codecType >> 8) & 0xFF),
+            CChar(codecType & 0xFF),
+            0
+        ]
+        return String(cString: chars)
     }
 #endif
 
