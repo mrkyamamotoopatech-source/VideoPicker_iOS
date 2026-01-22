@@ -224,11 +224,11 @@ void vp_default_config(VpConfig* config) {
   for (int i = 0; i < VP_MAX_ITEMS; ++i) {
     config->thresholds[i] = {0.0f, 0.0f};
   }
-  config->thresholds[VP_METRIC_SHARPNESS] = {800.0f, 50.0f};
-  config->thresholds[VP_METRIC_EXPOSURE] = {0.01f, 0.2f};
+  config->thresholds[VP_METRIC_SHARPNESS] = {20.0f, 2.0f};
+  config->thresholds[VP_METRIC_EXPOSURE] = {0.002f, 0.02f};
   config->thresholds[VP_METRIC_MOTION_BLUR] = {0.2f, 1.5f};
-  config->thresholds[VP_METRIC_NOISE] = {0.02f, 0.15f};
-  config->thresholds[VP_METRIC_PERSON_BLUR] = {800.0f, 50.0f};
+  config->thresholds[VP_METRIC_NOISE] = {0.001f, 0.01f};
+  config->thresholds[VP_METRIC_PERSON_BLUR] = {20.0f, 2.0f};
 }
 
 VpAnalyzer* vp_create(const VpConfig* config) {
