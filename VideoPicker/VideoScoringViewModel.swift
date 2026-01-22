@@ -268,7 +268,10 @@ final class VideoScoringViewModel: ObservableObject {
         }
 
         do {
-            try await transcodeForScoring(asset: asset, outputURL: outputURL)
+            let presetSucceeded = try await exportWithPreset(asset: asset, outputURL: outputURL)
+            if !presetSucceeded {
+                try await transcodeForScoring(asset: asset, outputURL: outputURL)
+            }
             await logExportedAssetDetails(outputURL)
         } catch {
             NSLog(
@@ -334,6 +337,52 @@ final class VideoScoringViewModel: ObservableObject {
     private func logExportedAssetDetails(_ url: URL) async {
         let exportedAsset = AVURLAsset(url: url)
         await logAssetDetails(exportedAsset, context: "transcoded")
+    }
+
+    private func exportWithPreset(asset: AVAsset, outputURL: URL) async throws -> Bool {
+        let presetName = AVAssetExportPresetMediumQuality
+        let compatiblePresets = AVAssetExportSession.exportPresets(compatibleWith: asset)
+        guard compatiblePresets.contains(presetName) else {
+            NSLog("VideoPickerScoring export preset unavailable: %@", presetName)
+            return false
+        }
+
+        guard let exportSession = AVAssetExportSession(asset: asset, presetName: presetName) else {
+            throw NSError(domain: "VideoPicker", code: 15, userInfo: [NSLocalizedDescriptionKey: "Export session failed"])
+        }
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        if #available(iOS 18, *) {
+            try await exportSession.export(to: outputURL, as: .mp4)
+        } else {
+            try await exportLegacy(exportSession)
+        }
+        return true
+    }
+
+    @available(iOS, deprecated: 18.0)
+    private func exportLegacy(_ exportSession: AVAssetExportSession) async throws {
+        struct ExportSessionBox: @unchecked Sendable {
+            let session: AVAssetExportSession
+        }
+        let sessionBox = ExportSessionBox(session: exportSession)
+
+        try await withCheckedThrowingContinuation { continuation in
+            sessionBox.session.exportAsynchronously {
+                switch sessionBox.session.status {
+                case .completed:
+                    continuation.resume(returning: ())
+                case .failed:
+                    continuation.resume(throwing: sessionBox.session.error ?? NSError(domain: "VideoPicker", code: 3))
+                case .cancelled:
+                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 4))
+                default:
+                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 5))
+                }
+            }
+        }
     }
 
     private func transcodeForScoring(asset: AVAsset, outputURL: URL) async throws {
