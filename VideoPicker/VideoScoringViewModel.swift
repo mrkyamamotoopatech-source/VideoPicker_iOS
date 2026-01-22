@@ -188,43 +188,10 @@ final class VideoScoringViewModel: ObservableObject {
 
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
-        do {
-            let frames = await loadFrameInputs(from: asset, maxFrames: 24)
-            guard !frames.isEmpty else {
-                NSLog("VideoPickerScoring skipped: no frames extracted")
-                return nil
-            }
-            var config = VideoPickerScoring.defaultConfig()
-            config.log_frame_details = 1
-            let scorer = try VideoPickerScoring(config: config)
-            let result = try scorer.analyze(frames: frames)
-            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
-            let score = weightedScore(from: result.mean, mode: scoringMode)
-            logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
-            return score
-        } catch {
-            if case let VideoPickerScoringError.analyzeFailed(code) = error {
-                let message = videoPickerScoringErrorMessage(for: code)
-                NSLog(
-                    "VideoPickerScoring analyze failed: code=%d (%@)",
-                    code,
-                    message
-                )
-            } else {
-                NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
-            }
-            return nil
-        }
-#else
-        return nil
-#endif
-    }
-
-#if canImport(VideoPickerScoring)
-    private func loadFrameInputs(from asset: AVAsset, maxFrames: Int) async -> [FrameInput] {
-        await Task.detached {
+        let mode = scoringMode
+        let summaryTask = Task.detached { () async -> ScoringSummary? in
             guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
-                return []
+                return nil
             }
             do {
                 let reader = try AVAssetReader(asset: asset)
@@ -235,12 +202,50 @@ final class VideoScoringViewModel: ObservableObject {
                 output.alwaysCopiesSampleData = false
                 reader.add(output)
                 guard reader.startReading() else {
-                    return []
+                    return nil
                 }
 
+                var config = VideoPickerScoring.defaultConfig()
+                config.log_frame_details = 1
+                let scorer = try VideoPickerScoring(config: config)
+
+                let chunkSize = 24
                 var frames: [FrameInput] = []
-                frames.reserveCapacity(maxFrames)
-                while reader.status == .reading && frames.count < maxFrames {
+                frames.reserveCapacity(chunkSize)
+                var totalFrames = 0
+                var scoreSums: [String: Float] = [:]
+                var rawSums: [String: Float] = [:]
+                var worstScores: [String: Float] = [:]
+                var worstRaws: [String: Float] = [:]
+
+                func merge(_ result: VideoQualityAggregate, frameCount: Int) {
+                    let weight = Float(frameCount)
+                    totalFrames += frameCount
+                    for item in result.mean {
+                        scoreSums[item.id, default: 0] += item.score * weight
+                        rawSums[item.id, default: 0] += item.raw * weight
+                    }
+                    for item in result.worst {
+                        if let current = worstScores[item.id] {
+                            if item.score < current {
+                                worstScores[item.id] = item.score
+                                worstRaws[item.id] = item.raw
+                            }
+                        } else {
+                            worstScores[item.id] = item.score
+                            worstRaws[item.id] = item.raw
+                        }
+                    }
+                }
+
+                func analyzeChunk() throws {
+                    guard !frames.isEmpty else { return }
+                    let result = try scorer.analyze(frames: frames)
+                    merge(result, frameCount: frames.count)
+                    frames.removeAll(keepingCapacity: true)
+                }
+
+                while reader.status == .reading {
                     autoreleasepool {
                         guard let sampleBuffer = output.copyNextSampleBuffer(),
                               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -249,12 +254,67 @@ final class VideoScoringViewModel: ObservableObject {
                         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                         frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
                     }
+                    if frames.count >= chunkSize {
+                        try analyzeChunk()
+                    }
                 }
-                return frames
+
+                if reader.status == .failed {
+                    return nil
+                }
+
+                try analyzeChunk()
+
+                guard totalFrames > 0 else {
+                    NSLog("VideoPickerScoring skipped: no frames extracted")
+                    return nil
+                }
+
+                let orderedIds = scoreSums.keys.sorted()
+                let meanItems = orderedIds.map { id -> VideoQualityItem in
+                    let meanScore = (scoreSums[id] ?? 0) / Float(totalFrames)
+                    let meanRaw = (rawSums[id] ?? 0) / Float(totalFrames)
+                    return VideoQualityItem(id: id, score: meanScore, raw: meanRaw)
+                }
+                let worstItems = orderedIds.map { id -> VideoQualityItem in
+                    let score = worstScores[id] ?? (scoreSums[id] ?? 0) / Float(totalFrames)
+                    let raw = worstRaws[id] ?? (rawSums[id] ?? 0) / Float(totalFrames)
+                    return VideoQualityItem(id: id, score: score, raw: raw)
+                }
+
+                NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
+                let score = weightedScore(from: meanItems, mode: mode)
+                return ScoringSummary(items: meanItems, score: score)
             } catch {
-                return []
+                if case let VideoPickerScoringError.analyzeFailed(code) = error {
+                    let message = videoPickerScoringErrorMessage(for: code)
+                    NSLog(
+                        "VideoPickerScoring analyze failed: code=%d (%@)",
+                        code,
+                        message
+                    )
+                } else {
+                    NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
+                }
+                return nil
             }
-        }.value
+        }
+        let summary = await summaryTask.value
+
+        guard let summary else {
+            return nil
+        }
+        logScoringDetails(items: summary.items, weightedScore: summary.score, mode: mode)
+        return summary.score
+#else
+        return nil
+#endif
+    }
+
+#if canImport(VideoPickerScoring)
+    private struct ScoringSummary {
+        let items: [VideoQualityItem]
+        let score: Int?
     }
 #endif
 
