@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import CoreMedia
 import Photos
 import UIKit
 #if canImport(VideoPickerScoring)
@@ -194,7 +195,7 @@ final class VideoScoringViewModel: ObservableObject {
         }
         do {
             let scorer = try VideoPickerScoring()
-            let result = try scorer.analyze(url: urlAsset.url)
+            let result = try await analyzeVideo(for: urlAsset, scorer: scorer)
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
@@ -217,6 +218,75 @@ final class VideoScoringViewModel: ObservableObject {
         return nil
 #endif
     }
+
+#if canImport(VideoPickerScoring)
+    private func analyzeVideo(for asset: AVURLAsset, scorer: VideoPickerScoring) async throws -> VideoQualityResult {
+        if let exportURL = try await exportToH264IfNeeded(asset: asset, force: false) {
+            defer { try? FileManager.default.removeItem(at: exportURL) }
+            return try scorer.analyze(url: exportURL)
+        }
+
+        do {
+            return try scorer.analyze(url: asset.url)
+        } catch {
+            if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5,
+               let exportURL = try? await exportToH264IfNeeded(asset: asset, force: true) {
+                defer { try? FileManager.default.removeItem(at: exportURL) }
+                return try scorer.analyze(url: exportURL)
+            }
+            throw error
+        }
+    }
+
+    private func exportToH264IfNeeded(asset: AVAsset, force: Bool) async throws -> URL? {
+        if !force, !needsTranscode(asset: asset) {
+            return nil
+        }
+
+        guard let exportSession = AVAssetExportSession(
+            asset: asset,
+            presetName: AVAssetExportPresetHighestQuality
+        ) else {
+            throw NSError(domain: "VideoPicker", code: 2, userInfo: [NSLocalizedDescriptionKey: "Export session failed"])
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("videopicker-transcode-\(UUID().uuidString).mp4")
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        try await withCheckedThrowingContinuation { continuation in
+            exportSession.exportAsynchronously {
+                switch exportSession.status {
+                case .completed:
+                    continuation.resume(returning: ())
+                case .failed:
+                    continuation.resume(throwing: exportSession.error ?? NSError(domain: "VideoPicker", code: 3))
+                case .cancelled:
+                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 4))
+                default:
+                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 5))
+                }
+            }
+        }
+
+        return outputURL
+    }
+
+    private func needsTranscode(asset: AVAsset) -> Bool {
+        guard let track = asset.tracks(withMediaType: .video).first,
+              let formatDescription = track.formatDescriptions.first as? CMFormatDescription else {
+            return false
+        }
+        let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
+        return codecType != kCMVideoCodecType_H264
+    }
+#endif
 
 #if canImport(VideoPickerScoring)
     private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
