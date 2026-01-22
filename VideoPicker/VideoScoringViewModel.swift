@@ -191,20 +191,20 @@ final class VideoScoringViewModel: ObservableObject {
         do {
             let scorer = try VideoPickerScoring()
             let scoringURL = try await loadScoringURL(from: asset)
-            let result: VideoPickerScoring.VideoQualityResult
-            do {
-                result = try scorer.analyze(url: scoringURL)
-            } catch {
-                if case let VideoPickerScoringError.analyzeFailed(code) = error,
-                   code == 5,
-                   let urlAsset = asset as? AVURLAsset {
-                    NSLog("VideoPickerScoring analyze retry with export for unsupported codec: %@", scoringURL.path)
-                    let exportURL = try await assetLoader.exportCompatibleURL(for: urlAsset)
-                    result = try scorer.analyze(url: exportURL)
-                } else {
+            let result = try {
+                do {
+                    return try scorer.analyze(url: scoringURL)
+                } catch {
+                    if case let VideoPickerScoringError.analyzeFailed(code) = error,
+                       code == 5,
+                       let urlAsset = asset as? AVURLAsset {
+                        NSLog("VideoPickerScoring analyze retry with export for unsupported codec: %@", scoringURL.path)
+                        let exportURL = try await assetLoader.exportCompatibleURL(for: urlAsset)
+                        return try scorer.analyze(url: exportURL)
+                    }
                     throw error
                 }
-            }
+            }()
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
