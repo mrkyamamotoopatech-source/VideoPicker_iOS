@@ -88,7 +88,7 @@ final class VideoScoringViewModel: ObservableObject {
             if let image = try? await generateImage(with: generator, at: time) {
                 let score = score(for: image, weightedScore: weightedScore)
                 let frame = ScoredFrame(image: image, time: time, score: score)
-                if frame.score >= 75 {
+                if frame.score >= 60 {
                     scoredFrames.append(frame)
                 }
                 if bestFrame == nil || frame.score > (bestFrame?.score ?? 0) {
@@ -288,7 +288,11 @@ final class VideoScoringViewModel: ObservableObject {
 
     private func logScoringDetails(items: [VideoQualityItem], weightedScore: Int?, mode: ScoringMode) {
         let detailString = items
-            .map { "\($0.id)=\($0.score)" }
+            .map {
+                let scoreText = String(format: "%.3f", $0.score)
+                let rawText = String(format: "%.3f", $0.raw)
+                return "\($0.id)=\(scoreText) raw=\(rawText)"
+            }
             .joined(separator: ", ")
         let scoreText = weightedScore.map(String.init) ?? "nil"
         NSLog("VideoPickerScoring details (mode=%@): %@ weightedScore=%@", "\(mode)", detailString, scoreText)
