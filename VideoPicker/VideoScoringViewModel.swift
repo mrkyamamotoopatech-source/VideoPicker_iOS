@@ -188,13 +188,14 @@ final class VideoScoringViewModel: ObservableObject {
 
     private func loadWeightedScore(from asset: AVAsset) async -> Int? {
 #if canImport(VideoPickerScoring)
-        guard let urlAsset = asset as? AVURLAsset else {
-            NSLog("VideoPickerScoring skipped: AVAsset is not AVURLAsset")
-            return nil
-        }
         do {
+            let frames = await loadFrameInputs(from: asset, maxFrames: 24)
+            guard !frames.isEmpty else {
+                NSLog("VideoPickerScoring skipped: no frames extracted")
+                return nil
+            }
             let scorer = try VideoPickerScoring()
-            let result = try scorer.analyze(url: urlAsset.url)
+            let result = try scorer.analyze(frames: frames)
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
             let score = weightedScore(from: result.mean, mode: scoringMode)
             logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
@@ -203,10 +204,9 @@ final class VideoScoringViewModel: ObservableObject {
             if case let VideoPickerScoringError.analyzeFailed(code) = error {
                 let message = videoPickerScoringErrorMessage(for: code)
                 NSLog(
-                    "VideoPickerScoring analyze failed: code=%d (%@) url=%@",
+                    "VideoPickerScoring analyze failed: code=%d (%@)",
                     code,
-                    message,
-                    urlAsset.url.path
+                    message
                 )
             } else {
                 NSLog("VideoPickerScoring analyze failed: %@", "\(error)")
@@ -217,6 +217,44 @@ final class VideoScoringViewModel: ObservableObject {
         return nil
 #endif
     }
+
+#if canImport(VideoPickerScoring)
+    private func loadFrameInputs(from asset: AVAsset, maxFrames: Int) async -> [FrameInput] {
+        await Task.detached {
+            guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
+                return []
+            }
+            do {
+                let reader = try AVAssetReader(asset: asset)
+                let outputSettings: [String: Any] = [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+                ]
+                let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+                output.alwaysCopiesSampleData = false
+                reader.add(output)
+                guard reader.startReading() else {
+                    return []
+                }
+
+                var frames: [FrameInput] = []
+                frames.reserveCapacity(maxFrames)
+                while reader.status == .reading && frames.count < maxFrames {
+                    autoreleasepool {
+                        guard let sampleBuffer = output.copyNextSampleBuffer(),
+                              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                            return
+                        }
+                        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                        frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
+                    }
+                }
+                return frames
+            } catch {
+                return []
+            }
+        }.value
+    }
+#endif
 
 #if canImport(VideoPickerScoring)
     private func weightedScore(from items: [VideoQualityItem], mode: ScoringMode) -> Int? {
@@ -267,7 +305,7 @@ final class VideoScoringViewModel: ObservableObject {
         case 4:
             return "decode error"
         case 5:
-            return "unsupported video or codec"
+            return "unsupported frame input"
         default:
             return "unknown error"
         }
