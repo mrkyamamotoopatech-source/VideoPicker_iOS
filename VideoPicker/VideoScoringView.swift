@@ -87,12 +87,13 @@ struct VideoScoringView: View {
         .navigationTitle(InfoPlistStrings.string("VP_Title_ScoringResult"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await viewModel.startScoring()
+            viewModel.startScoring()
         }
         .onChange(of: isPersonScoring) { _, newValue in
-            Task {
-                await viewModel.rescore(for: newValue ? .person : .scenery)
-            }
+            viewModel.rescore(for: newValue ? .person : .scenery)
+        }
+        .onDisappear {
+            viewModel.cancelScoring()
         }
         .overlay(alignment: .bottomTrailing) {
             Button {

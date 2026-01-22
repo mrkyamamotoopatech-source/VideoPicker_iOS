@@ -34,6 +34,10 @@ final class VideoScoringViewModel: ObservableObject {
     @Published var scoredFrames: [ScoredFrame] = []
 
     private(set) var scoringMode: ScoringMode = .person
+    private var scoringTask: Task<Void, Never>?
+#if canImport(VideoPickerScoring)
+    private var weightedScoreTask: Task<ScoringSummary?, Never>?
+#endif
 
     private let asset: PHAsset
     private let assetLoader: VideoAssetLoader
@@ -51,24 +55,50 @@ final class VideoScoringViewModel: ObservableObject {
 #endif
     }
 
-    func rescore(for mode: ScoringMode) async {
+    func rescore(for mode: ScoringMode) {
         guard mode != scoringMode else { return }
-        guard !isScoring else { return }
+        cancelScoring()
         scoringMode = mode
         scoredFrames = []
-        await startScoring()
+        startScoring()
     }
 
-    func startScoring() async {
-        guard !isScoring, scoredFrames.isEmpty else { return }
+    func startScoring() {
+        guard scoringTask == nil, scoredFrames.isEmpty else { return }
+        scoringTask = Task { [weak self] in
+            guard let self else { return }
+            await self.performScoring()
+        }
+    }
+
+    func cancelScoring() {
+        scoringTask?.cancel()
+        scoringTask = nil
+#if canImport(VideoPickerScoring)
+        weightedScoreTask?.cancel()
+        weightedScoreTask = nil
+#endif
+        isScoring = false
+    }
+
+    private func performScoring() async {
+        guard !isScoring, scoredFrames.isEmpty else {
+            scoringTask = nil
+            return
+        }
         isScoring = true
-        defer { isScoring = false }
+        defer {
+            isScoring = false
+            scoringTask = nil
+        }
 
         let avAsset = await assetLoader.loadAVAsset(for: asset)
+        guard !Task.isCancelled else { return }
         await scoreFrames(from: avAsset)
     }
 
     private func scoreFrames(from asset: AVAsset) async {
+        if Task.isCancelled { return }
         let duration = (try? await asset.load(.duration)) ?? .zero
         let durationSeconds = CMTimeGetSeconds(duration)
         guard durationSeconds.isFinite, durationSeconds > 0 else { return }
@@ -83,9 +113,11 @@ final class VideoScoringViewModel: ObservableObject {
         let weightedScore = await loadWeightedScore(from: asset)
 
         for index in 0..<sampleCount {
+            if Task.isCancelled { return }
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
             if let image = try? await generateImage(with: generator, at: time) {
+                if Task.isCancelled { return }
                 let score = score(for: image, weightedScore: weightedScore)
                 let frame = ScoredFrame(image: image, time: time, score: score)
                 if frame.score >= 60 {
@@ -103,6 +135,7 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
     private func generateImage(with generator: AVAssetImageGenerator, at time: CMTime) async throws -> UIImage {
+        try Task.checkCancellation()
         let cgImage = try await withCheckedThrowingContinuation { continuation in
             generator.generateCGImageAsynchronously(for: time) { cgImage, _, error in
                 if let cgImage {
@@ -112,6 +145,7 @@ final class VideoScoringViewModel: ObservableObject {
                 }
             }
         }
+        try Task.checkCancellation()
         return UIImage(cgImage: cgImage)
     }
 
@@ -190,6 +224,7 @@ final class VideoScoringViewModel: ObservableObject {
 #if canImport(VideoPickerScoring)
         let mode = scoringMode
         let summaryTask = Task.detached { () async -> ScoringSummary? in
+            if Task.isCancelled { return nil }
             guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
                 return nil
             }
@@ -233,6 +268,10 @@ final class VideoScoringViewModel: ObservableObject {
                 }
 
                 while reader.status == .reading {
+                    if Task.isCancelled {
+                        reader.cancelReading()
+                        return nil
+                    }
                     autoreleasepool {
                         guard let sampleBuffer = output.copyNextSampleBuffer(),
                               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -280,8 +319,11 @@ final class VideoScoringViewModel: ObservableObject {
                 return nil
             }
         }
+        weightedScoreTask = summaryTask
         let summary = await summaryTask.value
+        weightedScoreTask = nil
 
+        if Task.isCancelled { return nil }
         guard let summary else {
             return nil
         }
