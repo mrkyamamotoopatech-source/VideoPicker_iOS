@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 #if __has_include(<opencv2/core.hpp>)
 #define VP_HAS_OPENCV 1
@@ -138,8 +139,11 @@ float compute_person_blur(const GrayFrame& frame) {
   hog.detectMultiScale(resized, detections, 0.0, cv::Size(8, 8), cv::Size(16, 16), 1.05, 2.0, false);
 
   if (detections.empty()) {
+    std::fprintf(stderr, "vp_scoring person_blur: OpenCV enabled, no person detected (fallback)\n");
     return compute_sharpness(frame);
   }
+
+  std::fprintf(stderr, "vp_scoring person_blur: OpenCV enabled, detections=%zu\n", detections.size());
 
   double weighted_sum = 0.0;
   double area_sum = 0.0;
