@@ -209,6 +209,7 @@ struct VpAnalyzer {
   vp::AnalyzerImpl* impl;
 };
 
+extern "C" {
 void vp_default_config(VpConfig* config) {
   if (!config) {
     return;
@@ -258,3 +259,4 @@ void vp_destroy(VpAnalyzer* analyzer) {
   analyzer->impl = nullptr;
   delete analyzer;
 }
+} // extern "C"
