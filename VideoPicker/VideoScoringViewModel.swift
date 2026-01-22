@@ -195,10 +195,10 @@ final class VideoScoringViewModel: ObservableObject {
         }
         do {
             let scorer = try VideoPickerScoring()
-            let result = try await analyzeVideo(for: urlAsset, scorer: scorer)
-            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", result.mean.count)
-            let score = weightedScore(from: result.mean, mode: scoringMode)
-            logScoringDetails(items: result.mean, weightedScore: score, mode: scoringMode)
+            let meanItems = try await analyzeVideo(for: urlAsset, scorer: scorer)
+            NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
+            let score = weightedScore(from: meanItems, mode: scoringMode)
+            logScoringDetails(items: meanItems, weightedScore: score, mode: scoringMode)
             return score
         } catch {
             if case let VideoPickerScoringError.analyzeFailed(code) = error {
@@ -220,26 +220,26 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 #if canImport(VideoPickerScoring)
-    private func analyzeVideo(for asset: AVURLAsset, scorer: VideoPickerScoring) async throws -> VideoQualityResult {
+    private func analyzeVideo(for asset: AVURLAsset, scorer: VideoPickerScoring) async throws -> [VideoQualityItem] {
         if let exportURL = try await exportToH264IfNeeded(asset: asset, force: false) {
             defer { try? FileManager.default.removeItem(at: exportURL) }
-            return try scorer.analyze(url: exportURL)
+            return try scorer.analyze(url: exportURL).mean
         }
 
         do {
-            return try scorer.analyze(url: asset.url)
+            return try scorer.analyze(url: asset.url).mean
         } catch {
             if case let VideoPickerScoringError.analyzeFailed(code) = error, code == 5,
                let exportURL = try? await exportToH264IfNeeded(asset: asset, force: true) {
                 defer { try? FileManager.default.removeItem(at: exportURL) }
-                return try scorer.analyze(url: exportURL)
+                return try scorer.analyze(url: exportURL).mean
             }
             throw error
         }
     }
 
     private func exportToH264IfNeeded(asset: AVAsset, force: Bool) async throws -> URL? {
-        if !force, !needsTranscode(asset: asset) {
+        if !force, !(try await needsTranscode(asset: asset)) {
             return nil
         }
 
@@ -260,13 +260,42 @@ final class VideoScoringViewModel: ObservableObject {
         exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
 
+        if #available(iOS 18, *) {
+            try await exportSession.export(to: outputURL, as: .mp4)
+        } else {
+            try await exportLegacy(exportSession)
+        }
+
+        return outputURL
+    }
+
+    private func needsTranscode(asset: AVAsset) async throws -> Bool {
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        guard let track = tracks.first else {
+            return false
+        }
+        let formatDescriptions = try await track.load(.formatDescriptions)
+        guard let formatDescription = formatDescriptions.first else {
+            return false
+        }
+        let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
+        return codecType != kCMVideoCodecType_H264
+    }
+
+    @available(iOS, deprecated: 18.0)
+    private func exportLegacy(_ exportSession: AVAssetExportSession) async throws {
+        struct ExportSessionBox: @unchecked Sendable {
+            let session: AVAssetExportSession
+        }
+        let sessionBox = ExportSessionBox(session: exportSession)
+
         try await withCheckedThrowingContinuation { continuation in
-            exportSession.exportAsynchronously {
-                switch exportSession.status {
+            sessionBox.session.exportAsynchronously {
+                switch sessionBox.session.status {
                 case .completed:
                     continuation.resume(returning: ())
                 case .failed:
-                    continuation.resume(throwing: exportSession.error ?? NSError(domain: "VideoPicker", code: 3))
+                    continuation.resume(throwing: sessionBox.session.error ?? NSError(domain: "VideoPicker", code: 3))
                 case .cancelled:
                     continuation.resume(throwing: NSError(domain: "VideoPicker", code: 4))
                 default:
@@ -274,17 +303,6 @@ final class VideoScoringViewModel: ObservableObject {
                 }
             }
         }
-
-        return outputURL
-    }
-
-    private func needsTranscode(asset: AVAsset) -> Bool {
-        guard let track = asset.tracks(withMediaType: .video).first,
-              let formatDescription = track.formatDescriptions.first as? CMFormatDescription else {
-            return false
-        }
-        let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
-        return codecType != kCMVideoCodecType_H264
     }
 #endif
 
