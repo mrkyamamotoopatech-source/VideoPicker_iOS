@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		104FDEA02F221F9D002C9D9C /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104FDE9F2F221F9D002C9D9C /* opencv2.framework */; };
+		104FDECC2F22281C002C9D9C /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104FDECB2F22281C002C9D9C /* opencv2.framework */; };
 		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +30,7 @@
 
 /* Begin PBXFileReference section */
 		104FDE9F2F221F9D002C9D9C /* opencv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = opencv2.framework; sourceTree = "<group>"; };
+		104FDECB2F22281C002C9D9C /* opencv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = opencv2.framework; path = ios/opencv2.framework; sourceTree = "<group>"; };
 		10735AEC2F1F5135007678C7 /* VideoPicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VideoPicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735AF92F1F5137007678C7 /* VideoPickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoPickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735B032F1F5137007678C7 /* VideoPickerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoPickerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -71,7 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				104FDEA02F221F9D002C9D9C /* opencv2.framework in Frameworks */,
+				104FDECC2F22281C002C9D9C /* opencv2.framework in Frameworks */,
 				D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -96,6 +97,7 @@
 		104FDE9E2F221F9D002C9D9C /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				104FDECB2F22281C002C9D9C /* opencv2.framework */,
 				104FDE9F2F221F9D002C9D9C /* opencv2.framework */,
 			);
 			name = Frameworks;
@@ -439,9 +441,10 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/ios",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/VideoPicker/opencv2.framework/Headers";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/VideoPicker/ios/opencv2.framework/Headers";
 				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -474,9 +477,10 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/ios",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/VideoPicker/opencv2.framework/Headers";
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/VideoPicker/ios/opencv2.framework/Headers";
 				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
