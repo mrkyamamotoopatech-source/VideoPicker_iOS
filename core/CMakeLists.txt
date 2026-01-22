@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(vp_scoring STATIC
   src/vp_analyzer.cpp
-  src/vp_ffmpeg_decoder.cpp
   src/vp_metrics.cpp
 )
 
@@ -16,12 +15,6 @@ target_include_directories(vp_scoring PUBLIC
 
 target_include_directories(vp_scoring PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_link_libraries(vp_scoring
-  avformat
-  avcodec
-  swscale
 )
 
 add_executable(vp_cli

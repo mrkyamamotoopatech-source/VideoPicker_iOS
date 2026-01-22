@@ -1,11 +1,11 @@
 #include "vp_analyzer.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <new>
 #include <vector>
 
-#include "vp_ffmpeg_decoder.h"
 #include "vp_metrics.h"
 
 namespace vp {
@@ -54,66 +54,123 @@ static float compute_person_blur_wrapper(const GrayFrame& frame, const GrayFrame
   return compute_sharpness(frame);
 }
 
+static VpThreshold threshold_for_metric(const VpConfig& config, VpMetricId id) {
+  int index = static_cast<int>(id);
+  if (index < 0 || index >= VP_MAX_ITEMS) {
+    return VpThreshold{0.0f, 0.0f};
+  }
+  return config.thresholds[index];
+}
+
+static bool prepare_gray_frame(const VpFrame& input, std::vector<uint8_t>& buffer, GrayFrame* out) {
+  if (!out || !input.data || input.width <= 0 || input.height <= 0) {
+    return false;
+  }
+
+  int bytes_per_pixel = 0;
+  switch (input.format) {
+    case VP_PIXEL_GRAY8:
+      bytes_per_pixel = 1;
+      break;
+    case VP_PIXEL_RGBA8888:
+    case VP_PIXEL_BGRA8888:
+      bytes_per_pixel = 4;
+      break;
+    default:
+      return false;
+  }
+
+  if (input.stride_bytes <= 0 || input.stride_bytes < input.width * bytes_per_pixel) {
+    return false;
+  }
+
+  buffer.assign(static_cast<size_t>(input.width) * static_cast<size_t>(input.height), 0);
+
+  for (int y = 0; y < input.height; ++y) {
+    const uint8_t* row = input.data + static_cast<size_t>(y) * static_cast<size_t>(input.stride_bytes);
+    uint8_t* dst = buffer.data() + static_cast<size_t>(y) * static_cast<size_t>(input.width);
+    if (input.format == VP_PIXEL_GRAY8) {
+      std::copy(row, row + input.width, dst);
+    } else {
+      for (int x = 0; x < input.width; ++x) {
+        int offset = x * 4;
+        uint8_t r = 0;
+        uint8_t g = 0;
+        uint8_t b = 0;
+        if (input.format == VP_PIXEL_RGBA8888) {
+          r = row[offset];
+          g = row[offset + 1];
+          b = row[offset + 2];
+        } else {
+          b = row[offset];
+          g = row[offset + 1];
+          r = row[offset + 2];
+        }
+        dst[x] = static_cast<uint8_t>((299 * r + 587 * g + 114 * b) / 1000);
+      }
+    }
+  }
+
+  out->width = input.width;
+  out->height = input.height;
+  out->stride = input.width;
+  out->data = buffer.data();
+  return true;
+}
+
 class AnalyzerImpl {
  public:
   explicit AnalyzerImpl(const VpConfig& config)
       : config_(config) {
-    metrics_.push_back({VP_METRIC_SHARPNESS, config_.sharpness, compute_sharpness_wrapper});
-    metrics_.push_back({VP_METRIC_EXPOSURE, config_.exposure, compute_exposure_wrapper});
-    metrics_.push_back({VP_METRIC_MOTION_BLUR, config_.motion_blur, compute_motion_blur_wrapper});
-    metrics_.push_back({VP_METRIC_NOISE, config_.noise, compute_noise_wrapper});
-    metrics_.push_back({VP_METRIC_PERSON_BLUR, config_.sharpness, compute_person_blur_wrapper});
+    metrics_.push_back({VP_METRIC_SHARPNESS, threshold_for_metric(config_, VP_METRIC_SHARPNESS),
+                        compute_sharpness_wrapper});
+    metrics_.push_back({VP_METRIC_EXPOSURE, threshold_for_metric(config_, VP_METRIC_EXPOSURE),
+                        compute_exposure_wrapper});
+    metrics_.push_back({VP_METRIC_MOTION_BLUR, threshold_for_metric(config_, VP_METRIC_MOTION_BLUR),
+                        compute_motion_blur_wrapper});
+    metrics_.push_back(
+        {VP_METRIC_NOISE, threshold_for_metric(config_, VP_METRIC_NOISE), compute_noise_wrapper});
+    metrics_.push_back({VP_METRIC_PERSON_BLUR, threshold_for_metric(config_, VP_METRIC_PERSON_BLUR),
+                        compute_person_blur_wrapper});
   }
 
-  int analyze(const char* path, VpAggregateResult* out_result) {
-    if (!path || !out_result) {
+  int analyze(const VpFrame* frames, int frame_count, VpAggregateResult* out_result) {
+    if (!frames || frame_count <= 0 || !out_result) {
       return VP_ERR_INVALID_ARGUMENT;
     }
 
-    FfmpegDecoder decoder;
-    if (decoder.open(path) != 0) {
-      return VP_ERR_FFMPEG;
+    int max_frames = config_.max_frames > 0 ? config_.max_frames : frame_count;
+    int frames_to_process = std::min(frame_count, max_frames);
+    if (frames_to_process <= 0) {
+      return VP_ERR_INVALID_ARGUMENT;
     }
 
     std::vector<MetricAggregate> aggregates(metrics_.size());
-    DecodedFrame previous_frame;
+    std::vector<uint8_t> current_gray;
+    std::vector<uint8_t> previous_gray;
+    GrayFrame previous_frame{};
     bool has_previous = false;
-    int processed_frames = 0;
 
-    int decode_result = decoder.decode(config_.fps, config_.max_frames, config_.start_time_sec,
-                                       [&](const DecodedFrame& decoded) {
-      GrayFrame frame;
-      frame.width = decoded.width;
-      frame.height = decoded.height;
-      frame.stride = decoded.stride;
-      frame.data = decoded.gray.data();
-
-      GrayFrame prev_frame;
-      GrayFrame* prev_ptr = nullptr;
-      if (has_previous) {
-        prev_frame.width = previous_frame.width;
-        prev_frame.height = previous_frame.height;
-        prev_frame.stride = previous_frame.stride;
-        prev_frame.data = previous_frame.gray.data();
-        prev_ptr = &prev_frame;
+    for (int i = 0; i < frames_to_process; ++i) {
+      GrayFrame frame{};
+      if (!prepare_gray_frame(frames[i], current_gray, &frame)) {
+        return VP_ERR_UNSUPPORTED;
       }
 
-      for (size_t i = 0; i < metrics_.size(); ++i) {
-        float raw = metrics_[i].compute(frame, prev_ptr);
-        float score = normalize_score(raw, metrics_[i].threshold);
-        aggregates[i].update(raw, score);
+      GrayFrame* prev_ptr = has_previous ? &previous_frame : nullptr;
+      for (size_t metric_index = 0; metric_index < metrics_.size(); ++metric_index) {
+        float raw = metrics_[metric_index].compute(frame, prev_ptr);
+        float score = normalize_score(raw, metrics_[metric_index].threshold);
+        aggregates[metric_index].update(raw, score);
       }
 
-      previous_frame = decoded;
+      previous_gray.swap(current_gray);
+      previous_frame = frame;
+      previous_frame.data = previous_gray.data();
       has_previous = true;
-      ++processed_frames;
-    });
-
-    if (decode_result != 0) {
-      return VP_ERR_DECODE;
     }
 
-    if (processed_frames == 0) {
+    if (!has_previous) {
       return VP_ERR_DECODE;
     }
 
@@ -156,13 +213,17 @@ void vp_default_config(VpConfig* config) {
   if (!config) {
     return;
   }
-  config->fps = 5.0f;
   config->max_frames = 300;
-  config->start_time_sec = 0.0f;
-  config->sharpness = {800.0f, 50.0f};
-  config->exposure = {0.01f, 0.2f};
-  config->motion_blur = {0.2f, 1.5f};
-  config->noise = {0.02f, 0.15f};
+  config->fps = 5.0f;
+  config->normalize = {360, 0};
+  for (int i = 0; i < VP_MAX_ITEMS; ++i) {
+    config->thresholds[i] = {0.0f, 0.0f};
+  }
+  config->thresholds[VP_METRIC_SHARPNESS] = {800.0f, 50.0f};
+  config->thresholds[VP_METRIC_EXPOSURE] = {0.01f, 0.2f};
+  config->thresholds[VP_METRIC_MOTION_BLUR] = {0.2f, 1.5f};
+  config->thresholds[VP_METRIC_NOISE] = {0.02f, 0.15f};
+  config->thresholds[VP_METRIC_PERSON_BLUR] = {800.0f, 50.0f};
 }
 
 VpAnalyzer* vp_create(const VpConfig* config) {
@@ -181,11 +242,12 @@ VpAnalyzer* vp_create(const VpConfig* config) {
   return analyzer;
 }
 
-int vp_analyze_video_file(VpAnalyzer* analyzer, const char* path, VpAggregateResult* out_result) {
+int vp_analyze_frames(VpAnalyzer* analyzer, const VpFrame* frames, int frame_count,
+                      VpAggregateResult* out_result) {
   if (!analyzer || !analyzer->impl) {
     return VP_ERR_INVALID_ARGUMENT;
   }
-  return analyzer->impl->analyze(path, out_result);
+  return analyzer->impl->analyze(frames, frame_count, out_result);
 }
 
 void vp_destroy(VpAnalyzer* analyzer) {

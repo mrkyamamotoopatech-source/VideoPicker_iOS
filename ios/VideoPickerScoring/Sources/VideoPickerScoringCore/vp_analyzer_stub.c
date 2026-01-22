@@ -10,13 +10,17 @@ void vp_default_config(VpConfig* config) {
   if (!config) {
     return;
   }
-  config->fps = 1.0f;
   config->max_frames = 16;
-  config->start_time_sec = 0.0f;
-  config->sharpness = (VpThreshold){0.8f, 0.2f};
-  config->exposure = (VpThreshold){0.8f, 0.2f};
-  config->motion_blur = (VpThreshold){0.8f, 0.2f};
-  config->noise = (VpThreshold){0.8f, 0.2f};
+  config->fps = 1.0f;
+  config->normalize = (VpNormalize){360, 0};
+  for (int i = 0; i < VP_MAX_ITEMS; ++i) {
+    config->thresholds[i] = (VpThreshold){0.0f, 0.0f};
+  }
+  config->thresholds[VP_METRIC_SHARPNESS] = (VpThreshold){0.8f, 0.2f};
+  config->thresholds[VP_METRIC_EXPOSURE] = (VpThreshold){0.8f, 0.2f};
+  config->thresholds[VP_METRIC_MOTION_BLUR] = (VpThreshold){0.8f, 0.2f};
+  config->thresholds[VP_METRIC_NOISE] = (VpThreshold){0.8f, 0.2f};
+  config->thresholds[VP_METRIC_PERSON_BLUR] = (VpThreshold){0.8f, 0.2f};
 }
 
 VpAnalyzer* vp_create(const VpConfig* config) {
@@ -25,9 +29,11 @@ VpAnalyzer* vp_create(const VpConfig* config) {
   return analyzer;
 }
 
-int vp_analyze_video_file(VpAnalyzer* analyzer, const char* path, VpAggregateResult* out_result) {
+int vp_analyze_frames(VpAnalyzer* analyzer, const VpFrame* frames, int frame_count,
+                      VpAggregateResult* out_result) {
   (void)analyzer;
-  (void)path;
+  (void)frames;
+  (void)frame_count;
   if (out_result) {
     out_result->item_count = 0;
   }

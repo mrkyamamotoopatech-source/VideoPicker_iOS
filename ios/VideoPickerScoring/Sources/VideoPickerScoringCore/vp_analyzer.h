@@ -27,20 +27,36 @@ typedef enum {
   VP_METRIC_PERSON_BLUR = 4
 } VpMetricId;
 
+typedef enum {
+  VP_PIXEL_GRAY8 = 0,
+  VP_PIXEL_RGBA8888 = 1,
+  VP_PIXEL_BGRA8888 = 2
+} VpPixelFormat;
+
 typedef struct {
   float good;
   float bad;
 } VpThreshold;
 
 typedef struct {
-  float fps;
+  int32_t target_short_side;
+  int32_t target_long_side;
+} VpNormalize;
+
+typedef struct {
   int32_t max_frames;
-  float start_time_sec;
-  VpThreshold sharpness;
-  VpThreshold exposure;
-  VpThreshold motion_blur;
-  VpThreshold noise;
+  float fps;
+  VpNormalize normalize;
+  VpThreshold thresholds[VP_MAX_ITEMS];
 } VpConfig;
+
+typedef struct {
+  int32_t width;
+  int32_t height;
+  int32_t stride_bytes;
+  VpPixelFormat format;
+  const uint8_t* data;
+} VpFrame;
 
 typedef struct {
   int32_t id;
@@ -61,7 +77,8 @@ void vp_default_config(VpConfig* config);
 
 VpAnalyzer* vp_create(const VpConfig* config);
 
-int vp_analyze_video_file(VpAnalyzer* analyzer, const char* path, VpAggregateResult* out_result);
+int vp_analyze_frames(VpAnalyzer* analyzer, const VpFrame* frames, int frame_count,
+                      VpAggregateResult* out_result);
 
 void vp_destroy(VpAnalyzer* analyzer);
 
