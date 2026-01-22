@@ -284,6 +284,7 @@ final class VideoScoringViewModel: ObservableObject {
             } else {
                 try await exportLegacy(exportSession)
             }
+            await logExportedAssetDetails(outputURL)
         } catch {
             let status = exportSession.status.rawValue
             let errorDescription = exportSession.error?.localizedDescription ?? "unknown"
@@ -369,6 +370,11 @@ final class VideoScoringViewModel: ObservableObject {
         } else {
             NSLog("VideoPickerScoring asset details (%@): no video track", context)
         }
+    }
+
+    private func logExportedAssetDetails(_ url: URL) async {
+        let exportedAsset = AVURLAsset(url: url)
+        await logAssetDetails(exportedAsset, context: "transcoded")
     }
 
     private func fourCCString(for codecType: FourCharCode) -> String {
