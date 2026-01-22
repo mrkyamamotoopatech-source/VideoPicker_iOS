@@ -109,6 +109,7 @@ final class VideoScoringViewModel: ObservableObject {
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .zero
+        generator.maximumSize = CGSize(width: 512, height: 512)
 
         let sampleCount = 18
         var bestFrame: ScoredFrame?
@@ -118,16 +119,19 @@ final class VideoScoringViewModel: ObservableObject {
             if Task.isCancelled { return }
             let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
             let time = CMTime(seconds: seconds, preferredTimescale: 600)
-            if let image = try? await generateImage(with: generator, at: time) {
-                if Task.isCancelled { return }
+            guard let image = try? await generateImage(with: generator, at: time) else {
+                continue
+            }
+            let frame = autoreleasepool { () -> ScoredFrame in
                 let score = score(for: image, weightedScore: weightedScore)
-                let frame = ScoredFrame(image: image, time: time, score: score)
-                if frame.score >= 60 {
-                    scoredFrames.append(frame)
-                }
-                if bestFrame == nil || frame.score > (bestFrame?.score ?? 0) {
-                    bestFrame = frame
-                }
+                return ScoredFrame(image: image, time: time, score: score)
+            }
+            if Task.isCancelled { return }
+            if frame.score >= 60 {
+                scoredFrames.append(frame)
+            }
+            if bestFrame == nil || frame.score > (bestFrame?.score ?? 0) {
+                bestFrame = frame
             }
         }
 
@@ -250,8 +254,11 @@ final class VideoScoringViewModel: ObservableObject {
         }
         do {
             let reader = try AVAssetReader(asset: asset)
+            let maxDimension: CGFloat = 320
             let outputSettings: [String: Any] = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: maxDimension,
+                kCVPixelBufferHeightKey as String: maxDimension
             ]
             let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
             output.alwaysCopiesSampleData = false
@@ -270,6 +277,12 @@ final class VideoScoringViewModel: ObservableObject {
             var totalFrames = 0
             var scoreSums: [String: Float] = [:]
             var rawSums: [String: Float] = [:]
+            let targetSampleCount = 120
+            let durationSeconds = CMTimeGetSeconds(asset.duration)
+            let frameRate = max(track.nominalFrameRate, 1)
+            let estimatedFrames = durationSeconds.isFinite ? durationSeconds * Double(frameRate) : Double(targetSampleCount)
+            let sampleStride = max(1, Int(ceil(estimatedFrames / Double(targetSampleCount))))
+            var frameIndex = 0
 
             func merge(_ result: VideoQualityAggregate, frameCount: Int) {
                 let weight = Float(frameCount)
@@ -297,6 +310,8 @@ final class VideoScoringViewModel: ObservableObject {
                           let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
                         return
                     }
+                    defer { frameIndex += 1 }
+                    guard frameIndex % sampleStride == 0 else { return }
                     let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                     frames.append(FrameInput(pixelBuffer: pixelBuffer, timestamp: timestamp))
                 }
