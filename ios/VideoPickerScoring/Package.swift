@@ -9,7 +9,7 @@ let package = Package(
     products: [
         .library(
             name: "VideoPickerScoring",
-            targets: ["VideoPickerScoring"]
+            targets: ["VideoPickerScoring", "VideoPickerScoringCore"]
         )
     ],
     targets: [
