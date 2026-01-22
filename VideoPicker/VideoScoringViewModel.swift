@@ -444,8 +444,8 @@ final class VideoScoringViewModel: ObservableObject {
         }
 
         let compressionProperties: [String: Any] = [
-            AVVideoAverageBitRateKey: 6_000_000,
-            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+            AVVideoAverageBitRateKey: 3_000_000,
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
             AVVideoExpectedSourceFrameRateKey: 30,
             AVVideoMaxKeyFrameIntervalKey: 30
         ]
