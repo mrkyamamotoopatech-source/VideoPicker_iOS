@@ -132,6 +132,10 @@ xcodebuild -create-xcframework \
 - iOS: XCFramework を作成し、アプリ側に追加。Cヘッダを Swift から参照。
 - Android: NDK + CMake で JNI をビルドし AAR 化。
 
+### 17.1. フレーム入力方式の提案
+
+- [`Frame-based Scoring API (Proposal)`](frame_scoring_api.md)
+
 ### 18. API利用例
 
 - iOS: `VideoPickerScoring().analyze(url:)`
