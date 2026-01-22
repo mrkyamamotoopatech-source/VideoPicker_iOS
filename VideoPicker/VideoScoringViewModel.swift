@@ -261,37 +261,19 @@ final class VideoScoringViewModel: ObservableObject {
             return nil
         }
 
-        guard let exportSession = AVAssetExportSession(
-            asset: asset,
-            presetName: AVAssetExportPresetHighestQuality
-        ) else {
-            throw NSError(domain: "VideoPicker", code: 2, userInfo: [NSLocalizedDescriptionKey: "Export session failed"])
-        }
-
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("videopicker-transcode-\(UUID().uuidString).mp4")
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try FileManager.default.removeItem(at: outputURL)
         }
 
-        exportSession.outputURL = outputURL
-        exportSession.outputFileType = .mp4
-        exportSession.shouldOptimizeForNetworkUse = true
-
         do {
-            if #available(iOS 18, *) {
-                try await exportSession.export(to: outputURL, as: .mp4)
-            } else {
-                try await exportLegacy(exportSession)
-            }
+            try await transcodeForScoring(asset: asset, outputURL: outputURL)
             await logExportedAssetDetails(outputURL)
         } catch {
-            let status = exportSession.status.rawValue
-            let errorDescription = exportSession.error?.localizedDescription ?? "unknown"
             NSLog(
-                "VideoPickerScoring export failed: status=%d error=%@ output=%@",
-                status,
-                errorDescription,
+                "VideoPickerScoring export failed: error=%@ output=%@",
+                "\(error)",
                 outputURL.path
             )
             throw error
@@ -311,29 +293,6 @@ final class VideoScoringViewModel: ObservableObject {
         }
         let codecType = CMFormatDescriptionGetMediaSubType(formatDescription)
         return codecType != kCMVideoCodecType_H264
-    }
-
-    @available(iOS, deprecated: 18.0)
-    private func exportLegacy(_ exportSession: AVAssetExportSession) async throws {
-        struct ExportSessionBox: @unchecked Sendable {
-            let session: AVAssetExportSession
-        }
-        let sessionBox = ExportSessionBox(session: exportSession)
-
-        try await withCheckedThrowingContinuation { continuation in
-            sessionBox.session.exportAsynchronously {
-                switch sessionBox.session.status {
-                case .completed:
-                    continuation.resume(returning: ())
-                case .failed:
-                    continuation.resume(throwing: sessionBox.session.error ?? NSError(domain: "VideoPicker", code: 3))
-                case .cancelled:
-                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 4))
-                default:
-                    continuation.resume(throwing: NSError(domain: "VideoPicker", code: 5))
-                }
-            }
-        }
     }
 
     private func logAssetDetails(_ asset: AVURLAsset, context: String) async {
@@ -375,6 +334,130 @@ final class VideoScoringViewModel: ObservableObject {
     private func logExportedAssetDetails(_ url: URL) async {
         let exportedAsset = AVURLAsset(url: url)
         await logAssetDetails(exportedAsset, context: "transcoded")
+    }
+
+    private func transcodeForScoring(asset: AVAsset, outputURL: URL) async throws {
+        let reader = try AVAssetReader(asset: asset)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else {
+            throw NSError(domain: "VideoPicker", code: 6, userInfo: [NSLocalizedDescriptionKey: "Video track missing"])
+        }
+
+        let preferredTransform = try await videoTrack.load(.preferredTransform)
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let targetSize = CGSize(width: 1920, height: 1080)
+        let composition = buildVideoComposition(
+            track: videoTrack,
+            preferredTransform: preferredTransform,
+            naturalSize: naturalSize,
+            targetSize: targetSize,
+            duration: try await asset.load(.duration)
+        )
+
+        let readerOutput = AVAssetReaderVideoCompositionOutput(
+            videoTracks: [videoTrack],
+            videoSettings: [
+                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+            ]
+        )
+        readerOutput.videoComposition = composition
+        readerOutput.alwaysCopiesSampleData = false
+        guard reader.canAdd(readerOutput) else {
+            throw NSError(domain: "VideoPicker", code: 7, userInfo: [NSLocalizedDescriptionKey: "Reader output unavailable"])
+        }
+        reader.add(readerOutput)
+
+        let compressionProperties: [String: Any] = [
+            AVVideoAverageBitRateKey: 6_000_000,
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
+            AVVideoExpectedSourceFrameRateKey: 30,
+            AVVideoMaxKeyFrameIntervalKey: 30
+        ]
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: targetSize.width,
+            AVVideoHeightKey: targetSize.height,
+            AVVideoCompressionPropertiesKey: compressionProperties
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+        guard writer.canAdd(writerInput) else {
+            throw NSError(domain: "VideoPicker", code: 8, userInfo: [NSLocalizedDescriptionKey: "Writer input unavailable"])
+        }
+        writer.add(writerInput)
+
+        try await withCheckedThrowingContinuation { continuation in
+            let queue = DispatchQueue(label: "videopicker.scoring.transcode")
+            var didFinish = false
+
+            writer.startWriting()
+            writer.startSession(atSourceTime: .zero)
+            reader.startReading()
+
+            writerInput.requestMediaDataWhenReady(on: queue) {
+                guard !didFinish else { return }
+                while writerInput.isReadyForMoreMediaData {
+                    if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+                        if !writerInput.append(sampleBuffer) {
+                            didFinish = true
+                            reader.cancelReading()
+                            writerInput.markAsFinished()
+                            writer.cancelWriting()
+                            continuation.resume(
+                                throwing: writer.error ?? NSError(domain: "VideoPicker", code: 9)
+                            )
+                        }
+                    } else {
+                        didFinish = true
+                        writerInput.markAsFinished()
+                        writer.finishWriting {
+                            if let error = writer.error {
+                                continuation.resume(throwing: error)
+                            } else if reader.status == .failed {
+                                continuation.resume(throwing: reader.error ?? NSError(domain: "VideoPicker", code: 10))
+                            } else {
+                                continuation.resume(returning: ())
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    private func buildVideoComposition(
+        track: AVAssetTrack,
+        preferredTransform: CGAffineTransform,
+        naturalSize: CGSize,
+        targetSize: CGSize,
+        duration: CMTime
+    ) -> AVMutableVideoComposition {
+        let transformedSize = naturalSize.applying(preferredTransform)
+        let sourceSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+        let targetRect = CGRect(origin: .zero, size: targetSize)
+        let fittedRect = AVMakeRect(aspectRatio: sourceSize, insideRect: targetRect)
+        let scale = fittedRect.width / sourceSize.width
+        var transform = preferredTransform
+        transform = transform.concatenating(CGAffineTransform(scaleX: scale, y: scale))
+        transform = transform.concatenating(
+            CGAffineTransform(translationX: fittedRect.origin.x / scale, y: fittedRect.origin.y / scale)
+        )
+
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+        layerInstruction.setTransform(transform, at: .zero)
+
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
+        instruction.layerInstructions = [layerInstruction]
+
+        let composition = AVMutableVideoComposition()
+        composition.renderSize = targetSize
+        composition.frameDuration = CMTime(value: 1, timescale: 30)
+        composition.instructions = [instruction]
+        return composition
     }
 
     private func fourCCString(for codecType: FourCharCode) -> String {
