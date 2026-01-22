@@ -16,7 +16,7 @@ let package = Package(
         .target(
             name: "VideoPickerScoringCore",
             path: "Sources/VideoPickerScoringCore",
-            publicHeadersPath: "."
+            publicHeadersPath: "include"
         ),
         .target(
             name: "VideoPickerScoring",
