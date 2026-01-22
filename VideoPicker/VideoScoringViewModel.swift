@@ -362,7 +362,7 @@ final class VideoScoringViewModel: ObservableObject {
         let readerOutput = AVAssetReaderVideoCompositionOutput(
             videoTracks: [videoTrack],
             videoSettings: [
-                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange)
+                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
             ]
         )
         readerOutput.videoComposition = composition
