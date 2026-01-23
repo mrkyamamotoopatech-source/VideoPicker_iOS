@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		104FDECC2F22281C002C9D9C /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104FDECB2F22281C002C9D9C /* opencv2.framework */; };
+		104FDEFA2F2301C9002C9D9C /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104FDECB2F22281C002C9D9C /* opencv2.framework */; };
 		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
 /* End PBXBuildFile section */
 
@@ -71,7 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				104FDECC2F22281C002C9D9C /* opencv2.framework in Frameworks */,
+				104FDEFA2F2301C9002C9D9C /* opencv2.framework in Frameworks */,
 				D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -442,7 +442,10 @@
 					"$(PROJECT_DIR)/ios",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/ios/opencv2.framework/Headers";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/ios/opencv2.framework/Headers",
+					"$(SRCROOT)/ios/opencv2.framework/Versions/A/Headers",
+				);
 				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -478,7 +481,10 @@
 					"$(PROJECT_DIR)/ios",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/ios/opencv2.framework/Headers";
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/ios/opencv2.framework/Headers",
+					"$(SRCROOT)/ios/opencv2.framework/Versions/A/Headers",
+				);
 				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

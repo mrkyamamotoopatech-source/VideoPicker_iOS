@@ -25,6 +25,7 @@ let package = Package(
             cxxSettings: [
                 .headerSearchPath("include"),
                 .headerSearchPath("../ios/opencv2.framework/Headers"),
+                .headerSearchPath("../ios/opencv2.framework/Versions/A/Headers"),
                 .unsafeFlags(["-std=c++17"])
             ],
             linkerSettings: [
