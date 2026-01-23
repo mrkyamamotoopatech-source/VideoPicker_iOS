@@ -6,6 +6,7 @@
 //
 
 @preconcurrency import AVKit
+import OSLog
 import SwiftUI
 
 struct VideoDetailView: View {
@@ -187,6 +188,7 @@ private struct ControlButton: View {
     let control: ControlAction
     @State private var repeatTask: Task<Void, Never>?
     @State private var suppressNextTap = false
+    private let logger = Logger(subsystem: "VideoPicker", category: "ControlButton")
 
     var body: some View {
         Button {
@@ -223,6 +225,7 @@ private struct ControlButton: View {
     private func startRepeating() {
         guard repeatTask == nil else { return }
         suppressNextTap = true
+        logger.debug("Start repeat for \(control.id, privacy: .public)")
         repeatTask = Task {
             while !Task.isCancelled {
                 await MainActor.run {
@@ -234,6 +237,9 @@ private struct ControlButton: View {
     }
 
     private func stopRepeating() {
+        if repeatTask != nil {
+            logger.debug("Stop repeat for \(control.id, privacy: .public)")
+        }
         repeatTask?.cancel()
         repeatTask = nil
     }
