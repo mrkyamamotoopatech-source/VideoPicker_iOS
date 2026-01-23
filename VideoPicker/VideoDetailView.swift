@@ -136,42 +136,74 @@ struct VideoDetailView: View {
     private var leftControls: [ControlAction] {
         if viewModel.isPlaying {
             return [
-                ControlAction(id: "back5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "gobackward.5", allowsLongPress: false) {
-                    viewModel.seek(by: -5)
-                },
-                ControlAction(id: "back1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "gobackward.1", allowsLongPress: false) {
-                    viewModel.seek(by: -1)
-                }
+                ControlAction(
+                    id: "back5s",
+                    label: InfoPlistStrings.string("VP_Control_5s"),
+                    systemImage: "gobackward.5",
+                    action: { viewModel.seek(by: -5) },
+                    allowsLongPress: false
+                ),
+                ControlAction(
+                    id: "back1s",
+                    label: InfoPlistStrings.string("VP_Control_1s"),
+                    systemImage: "gobackward.1",
+                    action: { viewModel.seek(by: -1) },
+                    allowsLongPress: false
+                )
             ]
         }
         return [
-            ControlAction(id: "back5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "backward.frame.fill", allowsLongPress: true) {
-                viewModel.stepFrames(by: -5)
-            },
-            ControlAction(id: "back1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "backward.frame.fill", allowsLongPress: true) {
-                viewModel.stepFrames(by: -1)
-            }
+            ControlAction(
+                id: "back5f",
+                label: InfoPlistStrings.string("VP_Control_5f"),
+                systemImage: "backward.frame.fill",
+                action: { viewModel.stepFrames(by: -5) },
+                allowsLongPress: true
+            ),
+            ControlAction(
+                id: "back1f",
+                label: InfoPlistStrings.string("VP_Control_1f"),
+                systemImage: "backward.frame.fill",
+                action: { viewModel.stepFrames(by: -1) },
+                allowsLongPress: true
+            )
         ]
     }
 
     private var rightControls: [ControlAction] {
         if viewModel.isPlaying {
             return [
-                ControlAction(id: "forward1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "goforward.1", allowsLongPress: false) {
-                    viewModel.seek(by: 1)
-                },
-                ControlAction(id: "forward5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "goforward.5", allowsLongPress: false) {
-                    viewModel.seek(by: 5)
-                }
+                ControlAction(
+                    id: "forward1s",
+                    label: InfoPlistStrings.string("VP_Control_1s"),
+                    systemImage: "goforward.1",
+                    action: { viewModel.seek(by: 1) },
+                    allowsLongPress: false
+                ),
+                ControlAction(
+                    id: "forward5s",
+                    label: InfoPlistStrings.string("VP_Control_5s"),
+                    systemImage: "goforward.5",
+                    action: { viewModel.seek(by: 5) },
+                    allowsLongPress: false
+                )
             ]
         }
         return [
-            ControlAction(id: "forward1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "forward.frame.fill", allowsLongPress: true) {
-                viewModel.stepFrames(by: 1)
-            },
-            ControlAction(id: "forward5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "forward.frame.fill", allowsLongPress: true) {
-                viewModel.stepFrames(by: 5)
-            }
+            ControlAction(
+                id: "forward1f",
+                label: InfoPlistStrings.string("VP_Control_1f"),
+                systemImage: "forward.frame.fill",
+                action: { viewModel.stepFrames(by: 1) },
+                allowsLongPress: true
+            ),
+            ControlAction(
+                id: "forward5f",
+                label: InfoPlistStrings.string("VP_Control_5f"),
+                systemImage: "forward.frame.fill",
+                action: { viewModel.stepFrames(by: 5) },
+                allowsLongPress: true
+            )
         ]
     }
 }
