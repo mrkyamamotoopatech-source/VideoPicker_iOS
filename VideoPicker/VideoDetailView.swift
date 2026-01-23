@@ -136,19 +136,19 @@ struct VideoDetailView: View {
     private var leftControls: [ControlAction] {
         if viewModel.isPlaying {
             return [
-                ControlAction(id: "back5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "gobackward.5") {
+                ControlAction(id: "back5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "gobackward.5", allowsLongPress: false) {
                     viewModel.seek(by: -5)
                 },
-                ControlAction(id: "back1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "gobackward.1") {
+                ControlAction(id: "back1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "gobackward.1", allowsLongPress: false) {
                     viewModel.seek(by: -1)
                 }
             ]
         }
         return [
-            ControlAction(id: "back5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "backward.frame.fill") {
+            ControlAction(id: "back5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "backward.frame.fill", allowsLongPress: true) {
                 viewModel.stepFrames(by: -5)
             },
-            ControlAction(id: "back1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "backward.frame.fill") {
+            ControlAction(id: "back1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "backward.frame.fill", allowsLongPress: true) {
                 viewModel.stepFrames(by: -1)
             }
         ]
@@ -157,19 +157,19 @@ struct VideoDetailView: View {
     private var rightControls: [ControlAction] {
         if viewModel.isPlaying {
             return [
-                ControlAction(id: "forward1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "goforward.1") {
+                ControlAction(id: "forward1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "goforward.1", allowsLongPress: false) {
                     viewModel.seek(by: 1)
                 },
-                ControlAction(id: "forward5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "goforward.5") {
+                ControlAction(id: "forward5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "goforward.5", allowsLongPress: false) {
                     viewModel.seek(by: 5)
                 }
             ]
         }
         return [
-            ControlAction(id: "forward1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "forward.frame.fill") {
+            ControlAction(id: "forward1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "forward.frame.fill", allowsLongPress: true) {
                 viewModel.stepFrames(by: 1)
             },
-            ControlAction(id: "forward5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "forward.frame.fill") {
+            ControlAction(id: "forward5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "forward.frame.fill", allowsLongPress: true) {
                 viewModel.stepFrames(by: 5)
             }
         ]
@@ -181,22 +181,63 @@ private struct ControlAction {
     let label: String
     let systemImage: String
     let action: () -> Void
+    let allowsLongPress: Bool
 }
 
 private struct ControlButton: View {
     let control: ControlAction
+    @State private var isPressed = false
+    @State private var didRepeat = false
+    @State private var repeatTask: Task<Void, Never>?
 
     var body: some View {
-        Button(action: control.action) {
-            VStack(spacing: 4) {
-                Image(systemName: control.systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-                Text(control.label)
-                    .font(.caption2)
-            }
-            .frame(width: 48, height: 48)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
+        VStack(spacing: 4) {
+            Image(systemName: control.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+            Text(control.label)
+                .font(.caption2)
         }
-        .buttonStyle(.plain)
+        .frame(width: 48, height: 48)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isPressed else { return }
+                    isPressed = true
+                    if control.allowsLongPress {
+                        startRepeatTask()
+                    }
+                }
+                .onEnded { _ in
+                    handlePressEnded()
+                }
+        )
+        .accessibilityElement()
+        .accessibilityLabel(control.label)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private func startRepeatTask() {
+        repeatTask?.cancel()
+        repeatTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard isPressed, !Task.isCancelled else { return }
+            didRepeat = true
+            while isPressed, !Task.isCancelled {
+                control.action()
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+    }
+
+    private func handlePressEnded() {
+        isPressed = false
+        repeatTask?.cancel()
+        repeatTask = nil
+        if !didRepeat {
+            control.action()
+        }
+        didRepeat = false
     }
 }
