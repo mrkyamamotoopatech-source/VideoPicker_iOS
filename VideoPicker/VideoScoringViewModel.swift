@@ -278,8 +278,10 @@ final class VideoScoringViewModel: ObservableObject {
             var scoreSums: [String: Float] = [:]
             var rawSums: [String: Float] = [:]
             let targetSampleCount = 120
-            let durationSeconds = CMTimeGetSeconds(asset.duration)
-            let frameRate = max(track.nominalFrameRate, 1)
+            let duration = (try? await asset.load(.duration)) ?? asset.duration
+            let durationSeconds = CMTimeGetSeconds(duration)
+            let nominalFrameRate = (try? await track.load(.nominalFrameRate)) ?? track.nominalFrameRate
+            let frameRate = max(nominalFrameRate, 1)
             let estimatedFrames = durationSeconds.isFinite ? durationSeconds * Double(frameRate) : Double(targetSampleCount)
             let sampleStride = max(1, Int(ceil(estimatedFrames / Double(targetSampleCount))))
             var frameIndex = 0
