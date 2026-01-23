@@ -332,3 +332,11 @@ const char* metric_id_to_string(VpMetricId id) {
 }
 
 } // namespace vp
+
+extern "C" int vp_has_opencv(void) {
+#if defined(VP_HAS_OPENCV)
+  return 1;
+#else
+  return 0;
+#endif
+}

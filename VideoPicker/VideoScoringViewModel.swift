@@ -270,6 +270,8 @@ final class VideoScoringViewModel: ObservableObject {
             }
 
             let scorer = try VideoPickerScoring()
+            let opencvAvailable = vp_has_opencv()
+            NSLog("VideoPickerScoring OpenCV available=%d", opencvAvailable)
 
             let chunkSize = 24
             var frames: [FrameInput] = []
