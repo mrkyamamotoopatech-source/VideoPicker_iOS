@@ -108,7 +108,10 @@ static float compute_sharpness_in_rect(const GrayFrame& frame, int x, int y, int
 
 float compute_person_blur(const GrayFrame& frame) {
 #if defined(VP_HAS_OPENCV)
+  std::fprintf(stderr, "vp_scoring person_blur: OpenCV headers detected, using HOG detector path\n");
   if (frame.width <= 0 || frame.height <= 0 || !frame.data) {
+    std::fprintf(stderr, "vp_scoring person_blur: invalid frame width=%d height=%d data=%p\n",
+                 frame.width, frame.height, static_cast<const void*>(frame.data));
     return 0.0f;
   }
 
@@ -118,6 +121,8 @@ float compute_person_blur(const GrayFrame& frame) {
   if (max_dim > target_max_dim) {
     scale = static_cast<float>(target_max_dim) / static_cast<float>(max_dim);
   }
+  std::fprintf(stderr, "vp_scoring person_blur: frame=%dx%d stride=%d max_dim=%d scale=%.4f\n",
+               frame.width, frame.height, frame.stride, max_dim, scale);
 
   cv::Mat gray(frame.height, frame.width, CV_8UC1, const_cast<uint8_t*>(frame.data),
                static_cast<size_t>(frame.stride));
@@ -137,13 +142,13 @@ float compute_person_blur(const GrayFrame& frame) {
 
   std::vector<cv::Rect> detections;
   hog.detectMultiScale(resized, detections, 0.0, cv::Size(8, 8), cv::Size(16, 16), 1.05, 2.0, false);
+  std::fprintf(stderr, "vp_scoring person_blur: detectMultiScale resized=%dx%d detections=%zu\n",
+               resized.cols, resized.rows, detections.size());
 
   if (detections.empty()) {
     std::fprintf(stderr, "vp_scoring person_blur: OpenCV enabled, no person detected (fallback)\n");
     return compute_sharpness(frame);
   }
-
-  std::fprintf(stderr, "vp_scoring person_blur: OpenCV enabled, detections=%zu\n", detections.size());
 
   double weighted_sum = 0.0;
   double area_sum = 0.0;
@@ -158,6 +163,9 @@ float compute_person_blur(const GrayFrame& frame) {
     int clamped_width = std::min(width, frame.width - x);
     int clamped_height = std::min(height, frame.height - y);
     if (clamped_width <= 0 || clamped_height <= 0) {
+      std::fprintf(stderr,
+                   "vp_scoring person_blur: skip detection x=%d y=%d w=%d h=%d clamped_w=%d clamped_h=%d\n",
+                   x, y, width, height, clamped_width, clamped_height);
       continue;
     }
 
@@ -165,14 +173,22 @@ float compute_person_blur(const GrayFrame& frame) {
     double area = static_cast<double>(clamped_width) * static_cast<double>(clamped_height);
     weighted_sum += static_cast<double>(sharpness) * area;
     area_sum += area;
+    std::fprintf(stderr,
+                 "vp_scoring person_blur: detection x=%d y=%d w=%d h=%d sharpness=%.4f area=%.0f\n",
+                 x, y, clamped_width, clamped_height, sharpness, area);
   }
 
   if (area_sum <= 0.0) {
+    std::fprintf(stderr, "vp_scoring person_blur: area_sum=0, falling back to full-frame sharpness\n");
     return compute_sharpness(frame);
   }
 
-  return static_cast<float>(weighted_sum / area_sum);
+  float score = static_cast<float>(weighted_sum / area_sum);
+  std::fprintf(stderr, "vp_scoring person_blur: weighted_sum=%.4f area_sum=%.4f score=%.4f\n",
+               weighted_sum, area_sum, score);
+  return score;
 #else
+  std::fprintf(stderr, "vp_scoring person_blur: OpenCV headers not available, using sharpness fallback\n");
   return compute_sharpness(frame);
 #endif
 }

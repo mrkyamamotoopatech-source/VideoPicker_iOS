@@ -296,6 +296,8 @@ final class VideoScoringViewModel: ObservableObject {
             func analyzeChunk() throws {
                 guard !frames.isEmpty else { return }
                 let result = try scorer.analyze(frames: frames)
+                NSLog("VideoPickerScoring chunk analyzed: frames=%d", frames.count)
+                Self.logScoringDetails(items: result.mean, weightedScore: nil, mode: mode)
                 merge(result, frameCount: frames.count)
                 frames.removeAll(keepingCapacity: true)
             }
