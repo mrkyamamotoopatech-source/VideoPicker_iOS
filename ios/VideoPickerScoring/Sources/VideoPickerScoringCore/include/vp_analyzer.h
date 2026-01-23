@@ -83,6 +83,8 @@ int vp_analyze_frames(VpAnalyzer* analyzer, const VpFrame* frames, int frame_cou
 
 void vp_destroy(VpAnalyzer* analyzer);
 
+int vp_has_opencv(void);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
