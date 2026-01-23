@@ -185,9 +185,17 @@ private struct ControlAction {
 
 private struct ControlButton: View {
     let control: ControlAction
+    @State private var repeatTask: Task<Void, Never>?
+    @State private var suppressNextTap = false
 
     var body: some View {
-        Button(action: control.action) {
+        Button {
+            if suppressNextTap {
+                suppressNextTap = false
+                return
+            }
+            control.action()
+        } label: {
             VStack(spacing: 4) {
                 Image(systemName: control.systemImage)
                     .font(.system(size: 18, weight: .semibold))
@@ -198,5 +206,35 @@ private struct ControlButton: View {
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.2)
+                .onChanged { _ in
+                    startRepeating()
+                }
+                .onEnded { _ in
+                    stopRepeating()
+                }
+        )
+        .onDisappear {
+            stopRepeating()
+        }
+    }
+
+    private func startRepeating() {
+        guard repeatTask == nil else { return }
+        suppressNextTap = true
+        repeatTask = Task {
+            while !Task.isCancelled {
+                await MainActor.run {
+                    control.action()
+                }
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+    }
+
+    private func stopRepeating() {
+        repeatTask?.cancel()
+        repeatTask = nil
     }
 }
