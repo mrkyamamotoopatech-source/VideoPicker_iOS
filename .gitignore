@@ -1,42 +1,71 @@
+# =====================
+# macOS
+# =====================
+.DS_Store
+
+# =====================
 # Xcode
+# =====================
 xcuserdata/
 DerivedData/
 build/
 *.xcuserstate
-
-## Obj-C/Swift specific
 *.hmap
 
-## App packaging
+# =====================
+# App packaging
+# =====================
 *.ipa
-*.dSYM.zip
 *.dSYM
+*.dSYM.zip
+*.xcarchive
 
-## Playgrounds
+# =====================
+# Playgrounds
+# =====================
 timeline.xctimeline
 playground.xcworkspace
 
+# =====================
 # Swift Package Manager
+# =====================
 .build/
-# .swiftpm/
+# .swiftpm/   # ← ローカル管理したいならコメントアウトのままでOK
 
+# =====================
 # CocoaPods
-# Pods/   # ← CocoaPods使うならコメント外す（Podsをコミットしない方針なら）
-# *.xcworkspace  # ← CocoaPodsでworkspace生成する運用なら無視したい場合にコメント外す
+# =====================
+# Pods/
+# *.xcworkspace
 
+# =====================
 # Carthage
+# =====================
 Carthage/Build/
 
+# =====================
 # fastlane
+# =====================
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
-# OpenCV (manual framework - do not commit)
-opencv2.framework
-VideoPicker/ios/opencv2.framework
+# =====================
+# OpenCV build work (絶対にcommitしない)
+# =====================
+ios/ThirdPartyWork/
+src/opencv/
+src/opencv-ios-sim/
 
-# Xcode build artifacts
-DerivedData/
-build/
+# =====================
+# OpenCV binaries (絶対にcommitしない)
+# =====================
+ios/VideoPickerScoring/ThirdParty/
+ios/VideoPickerScoring/ThirdParty/**
+
+# =====================
+# Temporary scripts
+# =====================
+tmp_*.sh
+*.log

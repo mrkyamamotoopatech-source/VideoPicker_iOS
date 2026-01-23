@@ -13,8 +13,13 @@ let package = Package(
         )
     ],
     targets: [
+        .binaryTarget(
+            name: "opencv2",
+            path: "ThirdParty/opencv2.xcframework"
+        ),
         .target(
             name: "VideoPickerScoringCore",
+            dependencies: ["opencv2"],
             path: "Sources/VideoPickerScoringCore",
             sources: [
                 "vp_analyzer.cpp",
@@ -24,22 +29,17 @@ let package = Package(
             publicHeadersPath: "include",
             cxxSettings: [
                 .headerSearchPath("include"),
-                .headerSearchPath("../../../ios/opencv2.framework/Headers"),
-                .headerSearchPath("../../../ios/opencv2.framework/Versions/A/Headers"),
                 .unsafeFlags(["-std=c++17"])
             ],
             linkerSettings: [
-                .linkedLibrary("c++"),
-                .linkedFramework("opencv2", .when(platforms: [.iOS]))
+                .linkedLibrary("c++")
             ]
         ),
         .target(
             name: "VideoPickerScoring",
             dependencies: ["VideoPickerScoringCore"],
-            path: "Sources/VideoPickerScoring",
-            linkerSettings: [
-                .linkedLibrary("c++")
-            ]
+            path: "Sources/VideoPickerScoring"
         )
     ]
 )
+
