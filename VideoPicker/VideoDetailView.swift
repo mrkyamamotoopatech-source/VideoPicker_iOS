@@ -137,19 +137,19 @@ struct VideoDetailView: View {
     private var leftControls: [ControlAction] {
         if viewModel.isPlaying {
             return [
-                ControlAction(id: "back5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "gobackward.5") {
+                ControlAction(id: "back5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "gobackward.5", isRepeatable: false) {
                     viewModel.seek(by: -5)
                 },
-                ControlAction(id: "back1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "gobackward.1") {
+                ControlAction(id: "back1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "gobackward.1", isRepeatable: false) {
                     viewModel.seek(by: -1)
                 }
             ]
         }
         return [
-            ControlAction(id: "back5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "backward.frame.fill") {
+            ControlAction(id: "back5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "backward.frame.fill", isRepeatable: true) {
                 viewModel.stepFrames(by: -5)
             },
-            ControlAction(id: "back1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "backward.frame.fill") {
+            ControlAction(id: "back1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "backward.frame.fill", isRepeatable: true) {
                 viewModel.stepFrames(by: -1)
             }
         ]
@@ -158,19 +158,19 @@ struct VideoDetailView: View {
     private var rightControls: [ControlAction] {
         if viewModel.isPlaying {
             return [
-                ControlAction(id: "forward1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "goforward.1") {
+                ControlAction(id: "forward1s", label: InfoPlistStrings.string("VP_Control_1s"), systemImage: "goforward.1", isRepeatable: false) {
                     viewModel.seek(by: 1)
                 },
-                ControlAction(id: "forward5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "goforward.5") {
+                ControlAction(id: "forward5s", label: InfoPlistStrings.string("VP_Control_5s"), systemImage: "goforward.5", isRepeatable: false) {
                     viewModel.seek(by: 5)
                 }
             ]
         }
         return [
-            ControlAction(id: "forward1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "forward.frame.fill") {
+            ControlAction(id: "forward1f", label: InfoPlistStrings.string("VP_Control_1f"), systemImage: "forward.frame.fill", isRepeatable: true) {
                 viewModel.stepFrames(by: 1)
             },
-            ControlAction(id: "forward5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "forward.frame.fill") {
+            ControlAction(id: "forward5f", label: InfoPlistStrings.string("VP_Control_5f"), systemImage: "forward.frame.fill", isRepeatable: true) {
                 viewModel.stepFrames(by: 5)
             }
         ]
@@ -181,6 +181,7 @@ private struct ControlAction {
     let id: String
     let label: String
     let systemImage: String
+    let isRepeatable: Bool
     let action: () -> Void
 }
 
@@ -188,38 +189,54 @@ private struct ControlButton: View {
     let control: ControlAction
     @State private var repeatTask: Task<Void, Never>?
     @State private var suppressNextTap = false
+    @GestureState private var isLongPressing = false
     private let logger = Logger(subsystem: "VideoPicker", category: "ControlButton")
 
     var body: some View {
-        Button {
-            if suppressNextTap {
-                suppressNextTap = false
-                return
-            }
-            control.action()
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: control.systemImage)
-                    .font(.system(size: 18, weight: .semibold))
-                Text(control.label)
-                    .font(.caption2)
-            }
-            .frame(width: 48, height: 48)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.2)
-                .onChanged { _ in
-                    startRepeating()
+        if control.isRepeatable {
+            Button {
+                if suppressNextTap {
+                    suppressNextTap = false
+                    return
                 }
-                .onEnded { _ in
+                control.action()
+            } label: {
+                controlButtonContent
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.2)
+                    .updating($isLongPressing) { value, state, _ in
+                        state = value
+                    }
+            )
+            .onChange(of: isLongPressing) { isPressing in
+                if isPressing {
+                    startRepeating()
+                } else {
                     stopRepeating()
                 }
-        )
-        .onDisappear {
-            stopRepeating()
+            }
+            .onDisappear {
+                stopRepeating()
+            }
+        } else {
+            Button(action: control.action) {
+                controlButtonContent
+            }
+            .buttonStyle(.plain)
         }
+    }
+
+    private var controlButtonContent: some View {
+        VStack(spacing: 4) {
+            Image(systemName: control.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+            Text(control.label)
+                .font(.caption2)
+        }
+        .frame(width: 48, height: 48)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.accentColor.opacity(0.12)))
     }
 
     private func startRepeating() {
@@ -242,5 +259,6 @@ private struct ControlButton: View {
         }
         repeatTask?.cancel()
         repeatTask = nil
+        suppressNextTap = false
     }
 }
