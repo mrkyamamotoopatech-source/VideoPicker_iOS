@@ -32,3 +32,11 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# OpenCV (manual framework - do not commit)
+opencv2.framework
+VideoPicker/ios/opencv2.framework
+
+# Xcode build artifacts
+DerivedData/
+build/

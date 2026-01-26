@@ -45,6 +45,8 @@ final class VideoScoringViewModel: ObservableObject {
     var highestScore: Int {
         scoredFrames.map(\.score).max() ?? 0
     }
+    
+    private let thresholdScore = 10 // 表示するスコアの閾値
 
     init(asset: PHAsset, assetLoader: VideoAssetLoader = VideoAssetLoader()) {
         self.asset = asset
@@ -127,7 +129,7 @@ final class VideoScoringViewModel: ObservableObject {
                 return ScoredFrame(image: image, time: time, score: score)
             }
             if Task.isCancelled { return }
-            if frame.score >= 60 {
+            if frame.score >= thresholdScore {
                 scoredFrames.append(frame)
             }
             if bestFrame == nil || frame.score > (bestFrame?.score ?? 0) {
@@ -267,9 +269,7 @@ final class VideoScoringViewModel: ObservableObject {
                 return nil
             }
 
-            var config = VideoPickerScoring.defaultConfig()
-            config.log_frame_details = 1
-            let scorer = try VideoPickerScoring(config: config)
+            let scorer = try VideoPickerScoring()
 
             let chunkSize = 24
             var frames: [FrameInput] = []

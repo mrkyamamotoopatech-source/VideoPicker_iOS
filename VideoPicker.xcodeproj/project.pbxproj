@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		104FDEFA2F2301C9002C9D9C /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 104FDECB2F22281C002C9D9C /* opencv2.framework */; };
 		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
 /* End PBXBuildFile section */
 
@@ -28,6 +29,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		104FDECB2F22281C002C9D9C /* opencv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = opencv2.framework; path = ios/opencv2.framework; sourceTree = "<group>"; };
 		10735AEC2F1F5135007678C7 /* VideoPicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VideoPicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735AF92F1F5137007678C7 /* VideoPickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoPickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735B032F1F5137007678C7 /* VideoPickerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoPickerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -69,6 +71,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				104FDEFA2F2301C9002C9D9C /* opencv2.framework in Frameworks */,
 				D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -90,12 +93,21 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		104FDE9E2F221F9D002C9D9C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				104FDECB2F22281C002C9D9C /* opencv2.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		10735AE32F1F5135007678C7 = {
 			isa = PBXGroup;
 			children = (
 				10735AEE2F1F5135007678C7 /* VideoPicker */,
 				10735AFC2F1F5137007678C7 /* VideoPickerTests */,
 				10735B062F1F5137007678C7 /* VideoPickerUITests */,
+				104FDE9E2F221F9D002C9D9C /* Frameworks */,
 				10735AED2F1F5135007678C7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -216,7 +228,7 @@
 			mainGroup = 10735AE32F1F5135007678C7;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "VideoPickerScoring" */,
+				D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "ios/VideoPickerScoring" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 10735AED2F1F5135007678C7 /* Products */;
@@ -277,21 +289,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "VideoPickerScoring" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ios/VideoPickerScoring;
-		};
-/* End XCLocalSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		D0C8A5D02F7A123400000003 /* VideoPickerScoring */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "VideoPickerScoring" */;
-			productName = VideoPickerScoring;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXTargetDependency section */
 		10735AFB2F1F5137007678C7 /* PBXTargetDependency */ = {
@@ -439,7 +436,16 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2RK23VMLTQ;
 				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/ios",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/ios/opencv2.framework/Headers",
+					"$(SRCROOT)/ios/opencv2.framework/Versions/A/Headers",
+				);
 				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -469,7 +475,16 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 2RK23VMLTQ;
 				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+					"$(PROJECT_DIR)/ios",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/ios/opencv2.framework/Headers",
+					"$(SRCROOT)/ios/opencv2.framework/Versions/A/Headers",
+				);
 				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -602,6 +617,21 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "ios/VideoPickerScoring" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ios/VideoPickerScoring;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		D0C8A5D02F7A123400000003 /* VideoPickerScoring */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "ios/VideoPickerScoring" */;
+			productName = VideoPickerScoring;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 10735AE42F1F5135007678C7 /* Project object */;
 }

@@ -42,7 +42,7 @@ docs/
 - `VpAggregateResult`: 各指標の mean/worst を別配列で保持。
 - `VpItemResult`: `id`, `id_str`, `raw`, `score` を持ち、raw と score を両方返す。
 - `VpMetricId`: 5項目は enum 化。
-- `VpMetricId` に `person_blur` を追加（MVPは人物領域の代わりに全体sharpnessを使う）。
+- `VpMetricId` に `person_blur` を追加（人物検出で抽出した領域の sharpness を利用、人物が検出できない場合は全体 sharpness にフォールバック）。
 - `vp_create / vp_analyze_video_file / vp_destroy` を C ABI で公開。
 - エラーは `VpErrorCode` の int 値で返却。
 
@@ -71,6 +71,7 @@ docs/
 
 - `libswscale` を使い `GRAY8` へ変換。
 - raw 指標は `vp_metrics.cpp` にまとめ、`normalize_score()` で 0..1 に正規化。
+- `person_blur` は OpenCV の HOG 人物検出を使い、検出領域内の sharpness を計算（OpenCV が無い環境では全体 sharpness を返す）。
 
 ### 7. mean/worst集約
 

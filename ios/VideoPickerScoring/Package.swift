@@ -24,10 +24,13 @@ let package = Package(
             publicHeadersPath: "include",
             cxxSettings: [
                 .headerSearchPath("include"),
+                .headerSearchPath("../../../ios/opencv2.framework/Headers"),
+                .headerSearchPath("../../../ios/opencv2.framework/Versions/A/Headers"),
                 .unsafeFlags(["-std=c++17"])
             ],
             linkerSettings: [
-                .linkedLibrary("c++")
+                .linkedLibrary("c++"),
+                .linkedFramework("opencv2", .when(platforms: [.iOS]))
             ]
         ),
         .target(

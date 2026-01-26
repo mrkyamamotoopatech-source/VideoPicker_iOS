@@ -23,6 +23,7 @@ struct MetricResult {
 float normalize_score(float raw, const VpThreshold& threshold);
 
 float compute_sharpness(const GrayFrame& frame);
+float compute_person_blur(const GrayFrame& frame);
 float compute_exposure_clipping(const GrayFrame& frame);
 float compute_noise_estimate(const GrayFrame& frame);
 float compute_motion_blur(const GrayFrame& frame, const GrayFrame* prev_frame);
