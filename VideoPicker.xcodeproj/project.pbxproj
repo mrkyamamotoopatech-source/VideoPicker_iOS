@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		10AEE5512F28E2DE00A720CE /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10AEE54F2F28E2CF00A720CE /* opencv2.framework */; };
-		10AEE5522F28E2DE00A720CE /* opencv2.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 10AEE54F2F28E2CF00A720CE /* opencv2.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
 /* End PBXBuildFile section */
 
@@ -28,20 +27,6 @@
 			remoteInfo = VideoPicker;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		10AEE5532F28E2DE00A720CE /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				10AEE5522F28E2DE00A720CE /* opencv2.framework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		10735AEC2F1F5135007678C7 /* VideoPicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VideoPicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -147,7 +132,6 @@
 				10735AE82F1F5135007678C7 /* Sources */,
 				10735AE92F1F5135007678C7 /* Frameworks */,
 				10735AEA2F1F5135007678C7 /* Resources */,
-				10AEE5532F28E2DE00A720CE /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
