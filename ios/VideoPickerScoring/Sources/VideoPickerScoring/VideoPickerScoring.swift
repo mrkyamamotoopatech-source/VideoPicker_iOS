@@ -195,7 +195,7 @@ public final class VideoPickerScoring {
         }
 
         var metricValues: [VpMetricValue] = personBlurScores.map { score in
-            VpMetricValue(metric_id: Int32(VP_METRIC_PERSON_BLUR), raw: score)
+            VpMetricValue(metric_id: Int32(VP_METRIC_PERSON_BLUR.rawValue), raw: score)
         }
         var frameMetrics: [VpFrameMetrics] = Array(
             repeating: VpFrameMetrics(count: 0, values: nil),
@@ -203,9 +203,9 @@ public final class VideoPickerScoring {
         )
 
         var result = VpAggregateResult()
-        let code = metricValues.withUnsafeMutableBufferPointer { metricsBuffer in
+        let code: Int32 = metricValues.withUnsafeMutableBufferPointer { metricsBuffer in
             guard let baseMetrics = metricsBuffer.baseAddress else {
-                return VP_ERR_ALLOC
+                return Int32(VP_ERR_ALLOC.rawValue)
             }
             for index in 0..<frameMetrics.count {
                 frameMetrics[index] = VpFrameMetrics(
@@ -215,14 +215,14 @@ public final class VideoPickerScoring {
             }
             return frameMetrics.withUnsafeBufferPointer { frameMetricsBuffer in
                 return vpFrames.withUnsafeBufferPointer { frameBuffer in
-                    vp_analyze_frames_with_metrics(
+                    Int32(vp_analyze_frames_with_metrics(
                         analyzer,
                         frameBuffer.baseAddress,
                         Int32(frameBuffer.count),
                         frameMetricsBuffer.baseAddress,
                         Int32(frameMetricsBuffer.count),
                         &result
-                    )
+                    ))
                 }
             }
         }
