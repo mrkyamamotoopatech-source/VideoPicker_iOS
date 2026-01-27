@@ -297,7 +297,20 @@ final class VideoScoringViewModel: ObservableObject {
 
             func analyzeChunk() throws {
                 guard !frames.isEmpty else { return }
-                let result = try scorer.analyze(frames: frames)
+                let result: VideoQualityAggregate
+                switch mode {
+                case .person:
+                    let personBlurScores = frames.map { frame in
+                        Self.heuristicPersonBlurScore(from: frame.pixelBuffer)
+                    }
+                    NSLog(
+                        "VideoPickerScoring person mode: using heuristic person-blur scores. count=%d",
+                        personBlurScores.count
+                    )
+                    result = try scorer.analyze(frames: frames, personBlurScores: personBlurScores)
+                case .scenery:
+                    result = try scorer.analyze(frames: frames)
+                }
                 merge(result, frameCount: frames.count)
                 frames.removeAll(keepingCapacity: true)
             }
@@ -418,6 +431,45 @@ final class VideoScoringViewModel: ObservableObject {
         default:
             return "unknown error"
         }
+    }
+
+    private nonisolated static func heuristicPersonBlurScore(from pixelBuffer: CVPixelBuffer) -> Float {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+            return 0
+        }
+
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let sampleStride = max(1, min(width, height) / 64)
+
+        var count = 0
+        var mean = 0.0
+        var m2 = 0.0
+        let buffer = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        for y in stride(from: 0, to: height, by: sampleStride) {
+            let row = buffer.advanced(by: y * bytesPerRow)
+            for x in stride(from: 0, to: width, by: sampleStride) {
+                let pixel = row.advanced(by: x * 4)
+                let b = Double(pixel[0])
+                let g = Double(pixel[1])
+                let r = Double(pixel[2])
+                let luma = 0.114 * b + 0.587 * g + 0.299 * r
+                count += 1
+                let delta = luma - mean
+                mean += delta / Double(count)
+                let delta2 = luma - mean
+                m2 += delta * delta2
+            }
+        }
+
+        guard count > 1 else { return 0 }
+        let variance = m2 / Double(count - 1)
+        return Float(sqrt(variance) * 4.0)
     }
 #endif
 }

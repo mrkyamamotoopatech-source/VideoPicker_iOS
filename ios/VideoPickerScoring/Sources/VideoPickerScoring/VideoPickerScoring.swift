@@ -1,6 +1,7 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import os
 import VideoPickerScoringCore
 
 public struct VideoQualityItem {
@@ -25,6 +26,7 @@ public enum VideoPickerScoringError: Error {
     case analyzeFailed(code: Int32)
     case emptyFrames
     case invalidFrame
+    case metricCountMismatch(expected: Int, actual: Int)
     case unsupportedInput
     case unsupportedPixelFormat(OSType)
 }
@@ -40,6 +42,7 @@ public struct FrameInput {
 }
 
 public final class VideoPickerScoring {
+    private static let logger = Logger(subsystem: "VideoPickerScoring", category: "OpenCV")
     private let analyzer: OpaquePointer
 
     public convenience init() throws {
@@ -64,6 +67,7 @@ public final class VideoPickerScoring {
     }
 
     public func analyze(frames: [FrameInput]) throws -> VideoQualityAggregate {
+        Self.logger.info("Person blur source: built-in scoring (no external scores provided).")
         guard !frames.isEmpty else {
             throw VideoPickerScoringError.emptyFrames
         }
@@ -123,6 +127,108 @@ public final class VideoPickerScoring {
         var result = VpAggregateResult()
         let code = vpFrames.withUnsafeBufferPointer { buffer in
             vp_analyze_frames(analyzer, buffer.baseAddress, Int32(buffer.count), &result)
+        }
+        if code != 0 {
+            throw VideoPickerScoringError.analyzeFailed(code: code)
+        }
+        return Self.aggregate(from: result)
+    }
+
+    public func analyze(frames: [FrameInput], personBlurScores: [Float]) throws -> VideoQualityAggregate {
+        Self.logger.info("Person blur source: external scores provided by app. count=\(personBlurScores.count)")
+        guard !frames.isEmpty else {
+            throw VideoPickerScoringError.emptyFrames
+        }
+        guard frames.count == personBlurScores.count else {
+            throw VideoPickerScoringError.metricCountMismatch(
+                expected: frames.count,
+                actual: personBlurScores.count
+            )
+        }
+
+        var vpFrames: [VpFrame] = []
+        vpFrames.reserveCapacity(frames.count)
+        var lockedBuffers: [CVPixelBuffer] = []
+        lockedBuffers.reserveCapacity(frames.count)
+
+        do {
+            for frame in frames {
+                let pixelBuffer = frame.pixelBuffer
+                guard !CVPixelBufferIsPlanar(pixelBuffer) else {
+                    throw VideoPickerScoringError.unsupportedPixelFormat(
+                        CVPixelBufferGetPixelFormatType(pixelBuffer)
+                    )
+                }
+
+                CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+                lockedBuffers.append(pixelBuffer)
+
+                guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+                    throw VideoPickerScoringError.invalidFrame
+                }
+
+                let formatType = CVPixelBufferGetPixelFormatType(pixelBuffer)
+                guard let vpFormat = Self.vpPixelFormat(for: formatType) else {
+                    throw VideoPickerScoringError.unsupportedPixelFormat(formatType)
+                }
+
+                let width = CVPixelBufferGetWidth(pixelBuffer)
+                let height = CVPixelBufferGetHeight(pixelBuffer)
+                let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+
+                let vpFrame = VpFrame(
+                    width: Int32(width),
+                    height: Int32(height),
+                    stride_bytes: Int32(bytesPerRow),
+                    format: vpFormat,
+                    data: baseAddress.assumingMemoryBound(to: UInt8.self)
+                )
+                vpFrames.append(vpFrame)
+            }
+        } catch {
+            for buffer in lockedBuffers {
+                CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+            }
+            throw error
+        }
+
+        defer {
+            for buffer in lockedBuffers {
+                CVPixelBufferUnlockBaseAddress(buffer, .readOnly)
+            }
+        }
+
+        var metricValues: [VpMetricValue] = personBlurScores.map { score in
+            VpMetricValue(metric_id: Int32(VP_METRIC_PERSON_BLUR.rawValue), raw: score)
+        }
+        var frameMetrics: [VpFrameMetrics] = Array(
+            repeating: VpFrameMetrics(count: 0, values: nil),
+            count: frames.count
+        )
+
+        var result = VpAggregateResult()
+        let code: Int32 = metricValues.withUnsafeMutableBufferPointer { metricsBuffer in
+            guard let baseMetrics = metricsBuffer.baseAddress else {
+                return Int32(VP_ERR_ALLOC.rawValue)
+            }
+            for index in 0..<frameMetrics.count {
+                frameMetrics[index] = VpFrameMetrics(
+                    count: 1,
+                    values: baseMetrics.advanced(by: index)
+                )
+            }
+            return frameMetrics.withUnsafeBufferPointer { frameMetricsBuffer in
+                return vpFrames.withUnsafeBufferPointer { frameBuffer in
+                    Int32(vp_analyze_frames_with_metrics(
+                        analyzer,
+                        frameBuffer.baseAddress,
+                        Int32(frameBuffer.count),
+                        frameMetricsBuffer.baseAddress,
+                        Int32(frameMetricsBuffer.count),
+                        &result
+                    ))
+                }
+            }
         }
         if code != 0 {
             throw VideoPickerScoringError.analyzeFailed(code: code)
