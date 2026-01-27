@@ -205,7 +205,7 @@ public final class VideoPickerScoring {
         var result = VpAggregateResult()
         let code: Int32 = metricValues.withUnsafeMutableBufferPointer { metricsBuffer in
             guard let baseMetrics = metricsBuffer.baseAddress else {
-                return Int32(VP_ERR_ALLOC)
+                return Int32(VP_ERR_ALLOC.rawValue)
             }
             for index in 0..<frameMetrics.count {
                 frameMetrics[index] = VpFrameMetrics(
