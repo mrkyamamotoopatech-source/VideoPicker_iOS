@@ -106,6 +106,21 @@ xcodebuild -create-xcframework \
 
 - `samples/ios/VideoPickerScoringSample.swift` に最小 View を用意。
 
+### 13. opencv2.framework の配置と設定
+
+- `opencv2.framework` を Xcode プロジェクトの `VideoPicker` ターゲットに追加する。
+  - 配置先はリポジトリ内であれば `ios/Frameworks/opencv2.framework` など任意だが、
+    以後は同じパスで参照できるように保つ。
+  - Xcode の「Build Phases」→「Link Binary With Libraries」に `opencv2.framework` を追加する。
+  - Xcode の「Build Phases」→「Embed Frameworks」に `opencv2.framework` を追加し、
+    「Embed & Sign」を指定する。
+- Xcode の「Build Settings」で以下を確認する。
+  - `FRAMEWORK_SEARCH_PATHS` に `opencv2.framework` を置いたディレクトリを追加する
+    （例: `$(PROJECT_DIR)/ios/Frameworks`）。
+  - 既存の `OTHER_LDFLAGS` があれば `-lc++` が含まれていることを確認する。
+  - `Enable Bitcode` は `NO`（OpenCV の配布バイナリに合わせる）。
+- `opencv2.framework` を差し替える場合は、同じパスへ上書きし Xcode の参照が切れないようにする。
+
 ## D) Android (Kotlin/JNI)
 
 ### 13. JNIラッパ
