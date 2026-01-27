@@ -54,6 +54,21 @@ static float compute_person_blur_wrapper(const GrayFrame& frame, const GrayFrame
   return compute_sharpness(frame);
 }
 
+static bool lookup_metric_override(const VpFrameMetrics* frame_metrics, VpMetricId metric_id,
+                                   float* out_raw) {
+  if (!frame_metrics || !frame_metrics->values || frame_metrics->count <= 0 || !out_raw) {
+    return false;
+  }
+  for (int i = 0; i < frame_metrics->count; ++i) {
+    const VpMetricValue& value = frame_metrics->values[i];
+    if (value.metric_id == static_cast<int32_t>(metric_id)) {
+      *out_raw = value.raw;
+      return true;
+    }
+  }
+  return false;
+}
+
 static VpThreshold threshold_for_metric(const VpConfig& config, VpMetricId id) {
   int index = static_cast<int>(id);
   if (index < 0 || index >= VP_MAX_ITEMS) {
@@ -134,8 +149,13 @@ class AnalyzerImpl {
                         compute_person_blur_wrapper});
   }
 
-  int analyze(const VpFrame* frames, int frame_count, VpAggregateResult* out_result) {
+  int analyze(const VpFrame* frames, int frame_count, const VpFrameMetrics* frame_metrics,
+              int frame_metrics_count, VpAggregateResult* out_result) {
     if (!frames || frame_count <= 0 || !out_result) {
+      return VP_ERR_INVALID_ARGUMENT;
+    }
+    if ((frame_metrics && frame_metrics_count != frame_count) ||
+        (!frame_metrics && frame_metrics_count != 0)) {
       return VP_ERR_INVALID_ARGUMENT;
     }
 
@@ -158,8 +178,14 @@ class AnalyzerImpl {
       }
 
       GrayFrame* prev_ptr = has_previous ? &previous_frame : nullptr;
+      const VpFrameMetrics* metrics_for_frame =
+          frame_metrics ? &frame_metrics[i] : nullptr;
       for (size_t metric_index = 0; metric_index < metrics_.size(); ++metric_index) {
-        float raw = metrics_[metric_index].compute(frame, prev_ptr);
+        const MetricDefinition& metric = metrics_[metric_index];
+        float raw = 0.0f;
+        if (!lookup_metric_override(metrics_for_frame, metric.id, &raw)) {
+          raw = metric.compute(frame, prev_ptr);
+        }
         float score = normalize_score(raw, metrics_[metric_index].threshold);
         aggregates[metric_index].update(raw, score);
         if (config_.log_frame_details != 0) {
@@ -252,7 +278,16 @@ int vp_analyze_frames(VpAnalyzer* analyzer, const VpFrame* frames, int frame_cou
   if (!analyzer || !analyzer->impl) {
     return VP_ERR_INVALID_ARGUMENT;
   }
-  return analyzer->impl->analyze(frames, frame_count, out_result);
+  return analyzer->impl->analyze(frames, frame_count, nullptr, 0, out_result);
+}
+
+int vp_analyze_frames_with_metrics(VpAnalyzer* analyzer, const VpFrame* frames, int frame_count,
+                                   const VpFrameMetrics* frame_metrics, int frame_metrics_count,
+                                   VpAggregateResult* out_result) {
+  if (!analyzer || !analyzer->impl) {
+    return VP_ERR_INVALID_ARGUMENT;
+  }
+  return analyzer->impl->analyze(frames, frame_count, frame_metrics, frame_metrics_count, out_result);
 }
 
 void vp_destroy(VpAnalyzer* analyzer) {

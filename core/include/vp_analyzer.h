@@ -60,6 +60,16 @@ typedef struct {
 } VpFrame;
 
 typedef struct {
+  int32_t metric_id;
+  float raw;
+} VpMetricValue;
+
+typedef struct {
+  int32_t count;
+  const VpMetricValue* values;
+} VpFrameMetrics;
+
+typedef struct {
   int32_t id;
   char id_str[VP_METRIC_ID_MAX_LEN];
   float score;
@@ -80,6 +90,10 @@ VpAnalyzer* vp_create(const VpConfig* config);
 
 int vp_analyze_frames(VpAnalyzer* analyzer, const VpFrame* frames, int frame_count,
                       VpAggregateResult* out_result);
+
+int vp_analyze_frames_with_metrics(VpAnalyzer* analyzer, const VpFrame* frames, int frame_count,
+                                   const VpFrameMetrics* frame_metrics, int frame_metrics_count,
+                                   VpAggregateResult* out_result);
 
 void vp_destroy(VpAnalyzer* analyzer);
 
