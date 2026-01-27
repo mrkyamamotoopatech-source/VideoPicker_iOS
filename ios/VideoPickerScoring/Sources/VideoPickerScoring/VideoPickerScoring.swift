@@ -135,7 +135,7 @@ public final class VideoPickerScoring {
     }
 
     public func analyze(frames: [FrameInput], personBlurScores: [Float]) throws -> VideoQualityAggregate {
-        Self.logger.info("Person blur source: external scores provided (e.g., OpenCV). count=\(personBlurScores.count)")
+        Self.logger.info("Person blur source: external scores provided by app. count=\(personBlurScores.count)")
         guard !frames.isEmpty else {
             throw VideoPickerScoringError.emptyFrames
         }
