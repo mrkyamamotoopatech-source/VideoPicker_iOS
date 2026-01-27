@@ -1,6 +1,7 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import os
 import VideoPickerScoringCore
 
 public struct VideoQualityItem {
@@ -41,6 +42,7 @@ public struct FrameInput {
 }
 
 public final class VideoPickerScoring {
+    private static let logger = Logger(subsystem: "VideoPickerScoring", category: "OpenCV")
     private let analyzer: OpaquePointer
 
     public convenience init() throws {
@@ -65,6 +67,7 @@ public final class VideoPickerScoring {
     }
 
     public func analyze(frames: [FrameInput]) throws -> VideoQualityAggregate {
+        Self.logger.info("Person blur source: built-in scoring (no external scores provided).")
         guard !frames.isEmpty else {
             throw VideoPickerScoringError.emptyFrames
         }
@@ -132,6 +135,7 @@ public final class VideoPickerScoring {
     }
 
     public func analyze(frames: [FrameInput], personBlurScores: [Float]) throws -> VideoQualityAggregate {
+        Self.logger.info("Person blur source: external scores provided (e.g., OpenCV). count=\(personBlurScores.count)")
         guard !frames.isEmpty else {
             throw VideoPickerScoringError.emptyFrames
         }
