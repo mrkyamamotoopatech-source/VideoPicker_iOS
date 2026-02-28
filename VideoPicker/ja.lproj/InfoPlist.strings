@@ -40,7 +40,7 @@
 "VP_Scoring_Empty" = "該当するフレームがありません";
 "VP_Scoring_InProgress" = "採点中…";
 "VP_Title_FrameDetail" = "フレーム表示";
-"VP_Title_Main" = "VideoPicker";
+"VP_Title_Main" = "V-Snap";
 "VP_Title_ScoringResult" = "採点結果";
 "VP_Title_VideoDetail" = "動画詳細";
 "VP_Toast_Saved" = "保存しました";
