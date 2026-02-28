@@ -62,7 +62,7 @@ struct VideoScoringView: View {
                                 }
                                 .background(Color.black.opacity(0.05))
                                 .overlay(alignment: .topLeading) {
-                                    if frame.score == viewModel.highestScore {
+                                    if frame.score >= 80 {
                                         Image(systemName: "star.fill")
                                             .font(.caption.weight(.bold))
                                             .foregroundStyle(.yellow)

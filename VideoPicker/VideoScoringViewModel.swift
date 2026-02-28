@@ -141,7 +141,7 @@ final class VideoScoringViewModel: ObservableObject {
             let batchSize = 20
             var frameIndex = 0
             var topFrames: [ScoredFrame] = [] // 上位フレームを保持
-            let maxKeepFrames = 50 // 最大保持フレーム数
+            let maxKeepFrames = 200 // 最大保持フレーム数（大幅に増加）
             
             var currentBatch: [(UIImage, CMTime)] = []
             currentBatch.reserveCapacity(batchSize)
@@ -180,10 +180,20 @@ final class VideoScoringViewModel: ObservableObject {
                 await processBatch(currentBatch, topFrames: &topFrames, maxKeep: maxKeepFrames)
             }
             
-            // 最終結果を確実に設定（リアルタイム更新で既に設定されているが念のため）
+            // 最終結果の確認と補完（リアルタイム更新で既に設定されているものを保持）
             await MainActor.run {
-                let sortedFrames = topFrames.sorted { $0.score > $1.score }
-                self.scoredFrames = sortedFrames
+                // リアルタイム更新で蓄積されたscoredFramesに、まだ含まれていないtopFramesの要素を追加
+                var allFrames = self.scoredFrames
+                let existingTimes = Set(self.scoredFrames.map { $0.time })
+                
+                for frame in topFrames {
+                    if frame.score >= 60 && !existingTimes.contains(frame.time) {
+                        allFrames.append(frame)
+                    }
+                }
+                
+                // 時間順でソートして最終結果を設定
+                self.scoredFrames = allFrames.sorted { CMTimeCompare($0.time, $1.time) < 0 }
                 
                 // 最低限1つは表示
                 if self.scoredFrames.isEmpty && !topFrames.isEmpty {
@@ -226,16 +236,26 @@ final class VideoScoringViewModel: ObservableObject {
                             var currentFrames = self.scoredFrames
                             currentFrames.append(frame)
                             
-                            // スコア順にソートして上位のみ保持
-                            let sortedFrames = currentFrames.sorted { $0.score > $1.score }
-                            self.scoredFrames = Array(sortedFrames.prefix(min(maxKeep, sortedFrames.count)))
+                            // 時間の昇順でソート
+                            let sortedFrames = currentFrames.sorted { CMTimeCompare($0.time, $1.time) < 0 }
+                            
+                            // フレーム数を制限（メモリ管理）
+                            if sortedFrames.count > maxKeep {
+                                // 高スコアのフレームを優先的に保持（時系列は維持）
+                                let highScoreFrames = sortedFrames.sorted { $0.score > $1.score }.prefix(maxKeep)
+                                // 再度時間順でソート
+                                self.scoredFrames = Array(highScoreFrames).sorted { CMTimeCompare($0.time, $1.time) < 0 }
+                            } else {
+                                self.scoredFrames = sortedFrames
+                            }
                         }
                     }
                     
-                    // 上位フレームの数を制限（メモリ管理）
-                    if topFrames.count > maxKeep {
+                    // topFramesも同様にメモリ制限を適用（念のため）
+                    if topFrames.count > maxKeep * 2 { // scoredFramesより多めに保持
+                        // 高スコアのフレームを優先的に保持
                         topFrames.sort { $0.score > $1.score }
-                        topFrames = Array(topFrames.prefix(maxKeep))
+                        topFrames = Array(topFrames.prefix(maxKeep * 2))
                     }
                 }
             }
@@ -358,30 +378,36 @@ final class VideoScoringViewModel: ObservableObject {
         let variance = max(0, (sumSquares / count) - (average * average))
         let contrast = min(variance / 0.05, 1)
 
-        var edgeSum = Double(0)
-        var edgeCount = Double(0)
-        for y in 0..<targetSize {
-            for x in 0..<targetSize {
-                let index = y * targetSize + x
-                let current = luminance[index]
-                if x + 1 < targetSize {
-                    edgeSum += abs(current - luminance[index + 1])
-                    edgeCount += 1
-                }
-                if y + 1 < targetSize {
-                    edgeSum += abs(current - luminance[index + targetSize])
-                    edgeCount += 1
-                }
+        // より厳密なエッジ検出（ラプラシアンフィルタベース）
+        var laplacianSum = Double(0)
+        var laplacianCount = Double(0)
+        
+        for y in 1..<(targetSize - 1) {
+            for x in 1..<(targetSize - 1) {
+                let center = y * targetSize + x
+                let current = luminance[center]
+                
+                // ラプラシアンフィルタ（8近傍）
+                let neighbors = [
+                    luminance[center - targetSize - 1], luminance[center - targetSize], luminance[center - targetSize + 1],
+                    luminance[center - 1], luminance[center + 1],
+                    luminance[center + targetSize - 1], luminance[center + targetSize], luminance[center + targetSize + 1]
+                ]
+                
+                let laplacian = abs(8.0 * current - neighbors.reduce(0, +))
+                laplacianSum += laplacian
+                laplacianCount += 1
             }
         }
-        let edgeAverage = edgeCount > 0 ? edgeSum / edgeCount : 0
-        let edge = min(edgeAverage / 0.2, 1)
+        
+        let laplacianAverage = laplacianCount > 0 ? laplacianSum / laplacianCount : 0
+        let edge = min(laplacianAverage / 0.3, 1) // より高い閾値でシャープネスを厳格判定
 
         // 白飛び検出（高輝度ピクセルの割合）
         let overexposurePenalty = calculateOverexposurePenalty(luminance: luminance)
         
-        // ボケ検出（エッジの鮮明度）
-        let sharpnessScore = min(edge / 0.15, 1.0) // エッジを正規化
+        // ボケ検出（エッジの鮮明度）- より厳密な基準
+        let sharpnessScore = min(edge / 0.25, 1.0) // より高い閾値でボケ画像を厳しく判定
         
         // 人物検出のヒューリスティック（改良版）
         let centerPersonScore = calculatePersonHeuristic(luminance: luminance, targetSize: targetSize)
@@ -389,8 +415,8 @@ final class VideoScoringViewModel: ObservableObject {
         let quality: Double
         switch mode {
         case .person:
-            // 人物モード: 白飛び・ボケのペナルティを強化
-            let baseQuality = (0.15 * average) + (0.25 * contrast) + (0.35 * sharpnessScore) + (0.25 * centerPersonScore)
+            // 人物モード: シャープネスを最重要視（ボケ画像を厳しく評価）
+            let baseQuality = (0.10 * average) + (0.15 * contrast) + (0.55 * sharpnessScore) + (0.20 * centerPersonScore)
             quality = baseQuality * (1.0 - overexposurePenalty) // 白飛びでペナルティ
         case .scenery:
             // 風景モード: 全体品質を重視
