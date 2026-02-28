@@ -9,9 +9,20 @@ import SwiftUI
 
 @main
 struct VideoPickerApp: App {
+    @State private var isSplashScreenActive = false
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ZStack {
+                if isSplashScreenActive {
+                    ContentView()
+                        .transition(.opacity)
+                } else {
+                    SplashScreenView(isActive: $isSplashScreenActive)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.5), value: isSplashScreenActive)
         }
     }
 }
