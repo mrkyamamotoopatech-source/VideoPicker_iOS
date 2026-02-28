@@ -51,6 +51,8 @@ static float compute_noise_wrapper(const GrayFrame& frame, const GrayFrame*) {
 }
 
 static float compute_person_blur_wrapper(const GrayFrame& frame, const GrayFrame*) {
+  // 注意: 現在の実装ではOpenCVは使用されておらず、通常のsharpness指標で代用
+  // printf("[DEBUG] person_blur: OpenCV未使用、sharpness指標で代用中\n");
   return compute_sharpness(frame);
 }
 

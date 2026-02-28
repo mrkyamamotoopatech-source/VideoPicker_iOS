@@ -123,7 +123,7 @@ final class VideoScoringViewModel: ObservableObject {
                 continue
             }
             let frame = autoreleasepool { () -> ScoredFrame in
-                let score = score(for: image, weightedScore: weightedScore)
+                let score = score(for: image, weightedScore: weightedScore, mode: scoringMode)
                 return ScoredFrame(image: image, time: time, score: score)
             }
             if Task.isCancelled { return }
@@ -175,14 +175,14 @@ final class VideoScoringViewModel: ObservableObject {
         return UIImage(cgImage: cgImage)
     }
 
-    private func score(for image: UIImage, weightedScore: Int?) -> Int {
-        let frameScore = fallbackScore(for: image)
+    private func score(for image: UIImage, weightedScore: Int?, mode: ScoringMode) -> Int {
+        let frameScore = fallbackScore(for: image, mode: mode)
         guard let weightedScore else { return frameScore }
         let blended = (Double(weightedScore) * 0.7 + Double(frameScore) * 0.3).rounded()
         return min(100, max(0, Int(blended)))
     }
 
-    private func fallbackScore(for image: UIImage) -> Int {
+    private func fallbackScore(for image: UIImage, mode: ScoringMode) -> Int {
         guard let cgImage = image.cgImage else { return 0 }
         let targetSize = 32
         let bytesPerPixel = 4
@@ -241,9 +241,103 @@ final class VideoScoringViewModel: ObservableObject {
         let edgeAverage = edgeCount > 0 ? edgeSum / edgeCount : 0
         let edge = min(edgeAverage / 0.2, 1)
 
-        let quality = (0.3 * average) + (0.4 * contrast) + (0.3 * edge)
+        // 白飛び検出（高輝度ピクセルの割合）
+        let overexposurePenalty = calculateOverexposurePenalty(luminance: luminance)
+        
+        // ボケ検出（エッジの鮮明度）
+        let sharpnessScore = min(edge / 0.15, 1.0) // エッジを正規化
+        
+        // 人物検出のヒューリスティック（改良版）
+        let centerPersonScore = calculatePersonHeuristic(luminance: luminance, targetSize: targetSize)
+        
+        let quality: Double
+        switch mode {
+        case .person:
+            // 人物モード: 白飛び・ボケのペナルティを強化
+            let baseQuality = (0.15 * average) + (0.25 * contrast) + (0.35 * sharpnessScore) + (0.25 * centerPersonScore)
+            quality = baseQuality * (1.0 - overexposurePenalty) // 白飛びでペナルティ
+        case .scenery:
+            // 風景モード: 全体品質を重視
+            quality = (0.4 * average) + (0.4 * contrast) + (0.2 * sharpnessScore)
+        }
+        
         let score = 55 + Int((quality * 45).rounded())
         return min(100, max(0, score))
+    }
+    
+    private func calculateOverexposurePenalty(luminance: [Double]) -> Double {
+        // 白飛び（過露出）を検出
+        let overexposedCount = luminance.filter { $0 > 0.9 }.count
+        let overexposedRatio = Double(overexposedCount) / Double(luminance.count)
+        
+        // 20%以上が白飛びしている場合は大きなペナルティ
+        if overexposedRatio > 0.2 {
+            return min(overexposedRatio, 0.8) // 最大80%のペナルティ
+        } else if overexposedRatio > 0.1 {
+            return overexposedRatio * 0.5 // 軽微なペナルティ
+        }
+        return 0.0
+    }
+    
+    private func calculatePersonHeuristic(luminance: [Double], targetSize: Int) -> Double {
+        // 中央部分に人物がいる可能性をヒューリスティックに計算（改良版）
+        let centerX = targetSize / 2
+        let centerY = targetSize / 2
+        let radius = targetSize / 4
+        
+        var centerVariance = 0.0
+        var centerSum = 0.0
+        var centerCount = 0
+        var validPixels = 0 // 白飛びしていないピクセル数
+        
+        // 中央部の輝度分散を計算（白飛びピクセルを除外）
+        for y in (centerY - radius)..<(centerY + radius) {
+            for x in (centerX - radius)..<(centerX + radius) {
+                if y >= 0 && y < targetSize && x >= 0 && x < targetSize {
+                    let index = y * targetSize + x
+                    let value = luminance[index]
+                    
+                    // 白飛び（>0.9）や真っ黒（<0.1）なピクセルは除外
+                    if value > 0.1 && value < 0.9 {
+                        centerSum += value
+                        validPixels += 1
+                    }
+                    centerCount += 1
+                }
+            }
+        }
+        
+        // 有効なピクセルが少なすぎる場合は低評価
+        if validPixels < centerCount / 2 {
+            return 0.1
+        }
+        
+        if validPixels > 0 {
+            let centerMean = centerSum / Double(validPixels)
+            var sumSquares = 0.0
+            
+            for y in (centerY - radius)..<(centerY + radius) {
+                for x in (centerX - radius)..<(centerX + radius) {
+                    if y >= 0 && y < targetSize && x >= 0 && x < targetSize {
+                        let index = y * targetSize + x
+                        let value = luminance[index]
+                        
+                        if value > 0.1 && value < 0.9 {
+                            let diff = value - centerMean
+                            sumSquares += diff * diff
+                        }
+                    }
+                }
+            }
+            centerVariance = sumSquares / Double(validPixels)
+            
+            // 適度な分散（0.02-0.08）が人物らしい
+            if centerVariance >= 0.02 && centerVariance <= 0.08 {
+                return min(centerVariance / 0.05, 1.0)
+            }
+        }
+        
+        return 0.2 // デフォルト低評価
     }
 
 #if canImport(VideoPickerScoring)
@@ -254,7 +348,7 @@ final class VideoScoringViewModel: ObservableObject {
         }
         do {
             let reader = try AVAssetReader(asset: asset)
-            let maxDimension: CGFloat = 320
+            let maxDimension: CGFloat = 128
             let outputSettings: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: maxDimension,
@@ -270,20 +364,21 @@ final class VideoScoringViewModel: ObservableObject {
             var config = VideoPickerScoring.defaultConfig()
             config.log_frame_details = 1
             let scorer = try VideoPickerScoring(config: config)
+            print("📊 [VideoScoring] OpenCVによる動画採点を開始: モード=\(mode == .person ? "人物検出" : "風景")")
 
-            let chunkSize = 24
+            let chunkSize = 12
             var frames: [FrameInput] = []
             frames.reserveCapacity(chunkSize)
             var totalFrames = 0
             var scoreSums: [String: Float] = [:]
             var rawSums: [String: Float] = [:]
-            let targetSampleCount = 120
+            let targetSampleCount = Int.max
             let duration = (try? await asset.load(.duration)) ?? asset.duration
             let durationSeconds = CMTimeGetSeconds(duration)
             let nominalFrameRate = (try? await track.load(.nominalFrameRate)) ?? track.nominalFrameRate
             let frameRate = max(nominalFrameRate, 1)
             let estimatedFrames = durationSeconds.isFinite ? durationSeconds * Double(frameRate) : Double(targetSampleCount)
-            let sampleStride = max(1, Int(ceil(estimatedFrames / Double(targetSampleCount))))
+            let sampleStride = 1
             var frameIndex = 0
 
             func merge(_ result: VideoQualityAggregate, frameCount: Int) {
@@ -308,9 +403,18 @@ final class VideoScoringViewModel: ObservableObject {
                         personBlurScores.count
                     )
                     result = try scorer.analyze(frames: frames, personBlurScores: personBlurScores)
+                    print("🎯 [PersonMode] フレーム\(frames.count)枚の採点完了 - person_blur含む総合採点")
                 case .scenery:
                     result = try scorer.analyze(frames: frames)
+                    print("🌅 [SceneryMode] フレーム\(frames.count)枚の採点完了 - OpenCVなしの基本採点")
                 }
+                
+                // 採点結果の詳細ログ
+                print("📈 [採点結果] 平均スコア:")
+                for item in result.mean {
+                    print("  - \(item.id): score=\(String(format: "%.3f", item.score)), raw=\(String(format: "%.3f", item.raw))")
+                }
+                
                 merge(result, frameCount: frames.count)
                 frames.removeAll(keepingCapacity: true)
             }
@@ -354,6 +458,13 @@ final class VideoScoringViewModel: ObservableObject {
             }
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
             let score = Self.weightedScore(from: meanItems, mode: mode)
+            
+            // OpenCV使用状況の最終ログ
+            let hasPersonBlur = meanItems.contains { $0.id == "person_blur" }
+            print("✅ [動画採点完了] モード: \(mode == .person ? "人物検出" : "風景"), 総フレーム数: \(totalFrames)")
+            print("🔍 [OpenCV状況] person_blur指標: \(hasPersonBlur ? "有効" : "無効") - OpenCV\(hasPersonBlur ? "使用中" : "未使用")")
+            print("🏆 [最終スコア] 加重スコア: \(score ?? 0)")
+            
             Self.logScoringDetails(items: meanItems, weightedScore: score, mode: mode)
             return score
         } catch {
@@ -379,18 +490,18 @@ final class VideoScoringViewModel: ObservableObject {
         case .person:
             weights = [
                 "sharpness": 0.15,
-                "motion_blur": 0.40,
-                "exposure": 0.25,
-                "noise": 0.10,
-                "person_blur": 0.10
+                "motion_blur": 0.20,
+                "exposure": 0.10,
+                "noise": 0.05,
+                "person_blur": 0.50
             ]
         case .scenery:
             weights = [
-                "sharpness": 0.30,
-                "motion_blur": 0.20,
-                "exposure": 0.30,
-                "noise": 0.10,
-                "person_blur": 0.10
+                "sharpness": 0.40,
+                "motion_blur": 0.10,
+                "exposure": 0.40,
+                "noise": 0.08,
+                "person_blur": 0.02
             ]
         }
         let scores = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0.score) })
