@@ -42,14 +42,13 @@ struct VideoScoringView: View {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(Array(viewModel.scoredFrames.enumerated()), id: \.element.id) { index, frame in
                             NavigationLink {
-                                FrameDetailView(frames: viewModel.scoredFrames, selectedIndex: index)
+                                FrameDetailView(frames: viewModel.scoredFrames, selectedIndex: index, scoringViewModel: viewModel)
                             } label: {
                                 ZStack(alignment: .bottomTrailing) {
                                     Image(uiImage: frame.image)
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 110)
-                                        .frame(height: 110)
+                                        .frame(width: 110, height: 110)
                                         .clipped()
 
                                     Text(frame.timeLabel)
@@ -125,14 +124,18 @@ struct VideoScoringView: View {
 struct FrameDetailView: View {
     let frames: [ScoredFrame]
     let selectedIndex: Int
+    let scoringViewModel: VideoScoringViewModel
 
     @State private var selection: Int
     @State private var showsSaveToast = false
+    @State private var originalImages: [Int: UIImage] = [:] // オリジナル画像のキャッシュ
+    @State private var loadingImages: Set<Int> = [] // 読み込み中のインデックス
     @StateObject private var viewModel = FrameDetailViewModel()
 
-    init(frames: [ScoredFrame], selectedIndex: Int) {
+    init(frames: [ScoredFrame], selectedIndex: Int, scoringViewModel: VideoScoringViewModel) {
         self.frames = frames
         self.selectedIndex = selectedIndex
+        self.scoringViewModel = scoringViewModel
         _selection = State(initialValue: selectedIndex)
     }
 
@@ -141,11 +144,37 @@ struct FrameDetailView: View {
             TabView(selection: $selection) {
                 ForEach(frames.indices, id: \.self) { index in
                     VStack {
-                        Image(uiImage: frames[index].image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(.horizontal, 16)
+                        ZStack {
+                            // サムネイル画像（背景）
+                            Image(uiImage: frames[index].image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .padding(.horizontal, 16)
+                                .opacity(originalImages[index] != nil ? 0 : 1)
+                            
+                            // オリジナル画像（メイン）
+                            if let originalImage = originalImages[index] {
+                                Image(uiImage: originalImage)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .padding(.horizontal, 16)
+                                    .transition(.opacity)
+                            }
+                            
+                            // ローディングインジケータ
+                            if loadingImages.contains(index) {
+                                ProgressView()
+                                    .scaleEffect(1.2)
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.black.opacity(0.6))
+                                            .frame(width: 60, height: 60)
+                                    )
+                            }
+                        }
 
                         Text(InfoPlistStrings.formatted("VP_Label_ScoreResult", frames[index].score))
                             .font(.footnote.weight(.semibold))
@@ -153,6 +182,9 @@ struct FrameDetailView: View {
                             .padding(.bottom, 16)
                     }
                     .tag(index)
+                    .onAppear {
+                        loadOriginalImageIfNeeded(for: index)
+                    }
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -168,7 +200,9 @@ struct FrameDetailView: View {
 
                 Button {
                     Task {
-                        if await viewModel.saveFrame(frames[selection].image) {
+                        // オリジナル画像があればそれを保存、なければサムネイルを保存
+                        let imageToSave = originalImages[selection] ?? frames[selection].image
+                        if await viewModel.saveFrame(imageToSave) {
                             await showSaveToast()
                         }
                     }
@@ -195,6 +229,34 @@ struct FrameDetailView: View {
         .navigationTitle(InfoPlistStrings.string("VP_Title_FrameDetail"))
         .navigationBarTitleDisplayMode(.inline)
         .overlay(saveToastOverlay, alignment: .bottom)
+        .onChange(of: selection) { _, newIndex in
+            // 新しく選択されたフレームのオリジナル画像も読み込み
+            loadOriginalImageIfNeeded(for: newIndex)
+        }
+    }
+    
+    private func loadOriginalImageIfNeeded(for index: Int) {
+        // すでに読み込み済みまたは読み込み中の場合はスキップ
+        guard originalImages[index] == nil && !loadingImages.contains(index) else { return }
+        
+        loadingImages.insert(index)
+        
+        let frameTime = frames[index].time
+        
+        Task {
+            if let originalImage = await scoringViewModel.generateOriginalFrameImage(at: frameTime) {
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        originalImages[index] = originalImage
+                        loadingImages.remove(index)
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    loadingImages.remove(index)
+                }
+            }
+        }
     }
 
     private var saveToastOverlay: some View {

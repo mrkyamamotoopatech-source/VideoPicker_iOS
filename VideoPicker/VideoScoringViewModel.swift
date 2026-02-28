@@ -42,6 +42,8 @@ final class VideoScoringViewModel: ObservableObject {
 
     private let asset: PHAsset
     private let assetLoader: VideoAssetLoader
+    private(set) var avAsset: AVAsset?
+    private(set) var videoTransform: CGAffineTransform = .identity
     var highestScore: Int {
         scoredFrames.map(\.score).max() ?? 0
     }
@@ -96,49 +98,197 @@ final class VideoScoringViewModel: ObservableObject {
 
         let avAsset = await assetLoader.loadAVAsset(for: asset)
         guard !Task.isCancelled else { return }
+        
+        // AVAssetを保存
+        await MainActor.run {
+            self.avAsset = avAsset
+        }
+        
         await scoreFrames(from: avAsset)
     }
 
     private func scoreFrames(from asset: AVAsset) async {
         if Task.isCancelled { return }
-        let duration = (try? await asset.load(.duration)) ?? .zero
-        let durationSeconds = CMTimeGetSeconds(duration)
-        guard durationSeconds.isFinite, durationSeconds > 0 else { return }
-
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.requestedTimeToleranceBefore = .zero
-        generator.requestedTimeToleranceAfter = .zero
-        generator.maximumSize = CGSize(width: 512, height: 512)
-
-        let sampleCount = 18
-        var bestFrame: ScoredFrame?
-        startWeightedScoreLoad(for: asset)
-
-        for index in 0..<sampleCount {
-            if Task.isCancelled { return }
-            let seconds = durationSeconds * Double(index + 1) / Double(sampleCount + 1)
-            let time = CMTime(seconds: seconds, preferredTimescale: 600)
-            guard let image = try? await generateImage(with: generator, at: time) else {
-                continue
-            }
-            let frame = autoreleasepool { () -> ScoredFrame in
-                let score = score(for: image, weightedScore: weightedScore, mode: scoringMode)
-                return ScoredFrame(image: image, time: time, score: score)
-            }
-            if Task.isCancelled { return }
-            if frame.score >= 60 {
-                scoredFrames.append(frame)
-            }
-            if bestFrame == nil || frame.score > (bestFrame?.score ?? 0) {
-                bestFrame = frame
-            }
+        
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return }
+        
+        // ビデオの向きを取得して保存
+        let transform = (try? await track.load(.preferredTransform)) ?? CGAffineTransform.identity
+        await MainActor.run {
+            self.videoTransform = transform
         }
-
-        if scoredFrames.isEmpty, let bestFrame {
-            scoredFrames.append(bestFrame)
+        
+        do {
+            let reader = try AVAssetReader(asset: asset)
+            
+            // サムネイルサイズで処理（メモリ効率化）
+            let thumbnailSize: CGFloat = 128
+            let outputSettings: [String: Any] = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: thumbnailSize,
+                kCVPixelBufferHeightKey as String: thumbnailSize
+            ]
+            
+            let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+            output.alwaysCopiesSampleData = false
+            reader.add(output)
+            
+            guard reader.startReading() else { return }
+            
+            startWeightedScoreLoad(for: asset)
+            
+            // メモリ効率的なバッチ処理
+            let batchSize = 20
+            var frameIndex = 0
+            var topFrames: [ScoredFrame] = [] // 上位フレームを保持
+            let maxKeepFrames = 50 // 最大保持フレーム数
+            
+            var currentBatch: [(UIImage, CMTime)] = []
+            currentBatch.reserveCapacity(batchSize)
+            
+            while reader.status == .reading {
+                if Task.isCancelled {
+                    reader.cancelReading()
+                    return
+                }
+                
+                autoreleasepool {
+                    guard let sampleBuffer = output.copyNextSampleBuffer(),
+                          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+                        return
+                    }
+                    
+                    let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                    
+                    // PixelBufferからUIImageに変換（サムネイルサイズ）
+                    if let image = pixelBufferToUIImage(pixelBuffer, transform: transform) {
+                        currentBatch.append((image, timestamp))
+                    }
+                    
+                    frameIndex += 1
+                }
+                
+                // バッチが満杯になったら処理
+                if currentBatch.count >= batchSize {
+                    await processBatch(currentBatch, topFrames: &topFrames, maxKeep: maxKeepFrames)
+                    currentBatch.removeAll(keepingCapacity: true)
+                }
+            }
+            
+            // 残りのバッチを処理
+            if !currentBatch.isEmpty {
+                await processBatch(currentBatch, topFrames: &topFrames, maxKeep: maxKeepFrames)
+            }
+            
+            // 最終結果を確実に設定（リアルタイム更新で既に設定されているが念のため）
+            await MainActor.run {
+                let sortedFrames = topFrames.sorted { $0.score > $1.score }
+                self.scoredFrames = sortedFrames
+                
+                // 最低限1つは表示
+                if self.scoredFrames.isEmpty && !topFrames.isEmpty {
+                    self.scoredFrames.append(topFrames.max { $0.score < $1.score }!)
+                }
+            }
+            
+        } catch {
+            NSLog("Frame scoring failed: %@", "\(error)")
         }
     }
+    
+    private func processBatch(_ batch: [(UIImage, CMTime)], topFrames: inout [ScoredFrame], maxKeep: Int) async {
+        // MainActorプロパティを先にキャプチャ
+        let currentWeightedScore = weightedScore
+        let currentScoringMode = scoringMode
+        
+        await withTaskGroup(of: ScoredFrame?.self) { group in
+            // バッチ内の各フレームを並列処理
+            for (image, time) in batch {
+                group.addTask { [weak self] in
+                    guard let self = self else { return nil }
+                    return autoreleasepool {
+                        let score = self.score(for: image, weightedScore: currentWeightedScore, mode: currentScoringMode)
+                        return ScoredFrame(image: image, time: time, score: score)
+                    }
+                }
+            }
+            
+            // 結果を収集してリアルタイムで表示
+            for await result in group {
+                if let frame = result {
+                    // 60点以上のフレームのみ保持
+                    if frame.score >= 60 {
+                        topFrames.append(frame)
+                        
+                        // リアルタイムでUIを更新
+                        await MainActor.run {
+                            // 既存のscoredFramesに新しいフレームを追加
+                            var currentFrames = self.scoredFrames
+                            currentFrames.append(frame)
+                            
+                            // スコア順にソートして上位のみ保持
+                            let sortedFrames = currentFrames.sorted { $0.score > $1.score }
+                            self.scoredFrames = Array(sortedFrames.prefix(min(maxKeep, sortedFrames.count)))
+                        }
+                    }
+                    
+                    // 上位フレームの数を制限（メモリ管理）
+                    if topFrames.count > maxKeep {
+                        topFrames.sort { $0.score > $1.score }
+                        topFrames = Array(topFrames.prefix(maxKeep))
+                    }
+                }
+            }
+        }
+    }
+    
+    private nonisolated func pixelBufferToUIImage(_ pixelBuffer: CVPixelBuffer, transform: CGAffineTransform) -> UIImage? {
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext(options: nil)
+        
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+            return nil
+        }
+        
+        // ビデオのtransformに基づいて適切なUIImage.Orientationを決定
+        let orientation = Self.imageOrientation(from: transform)
+        return UIImage(cgImage: cgImage, scale: 1.0, orientation: orientation)
+    }
+    
+    private nonisolated static func imageOrientation(from transform: CGAffineTransform) -> UIImage.Orientation {
+        // CGAffineTransformからUIImage.Orientationに変換
+        let angle = atan2(transform.b, transform.a) * 180.0 / .pi
+        
+        switch Int(angle) {
+        case 90:
+            return .right
+        case -90, 270:
+            return .left
+        case 180:
+            return .down
+        default:
+            return .up
+        }
+    }
+    
+    // オリジナル解像度のフレーム画像を生成（簡易版）
+    func generateOriginalFrameImage(at time: CMTime) async -> UIImage? {
+        guard let avAsset = self.avAsset else { return nil }
+        
+        do {
+            let imageGenerator = AVAssetImageGenerator(asset: avAsset)
+            imageGenerator.appliesPreferredTrackTransform = true
+            imageGenerator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
+            imageGenerator.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
+            
+            let cgImage = try await imageGenerator.image(at: time).image
+            return UIImage(cgImage: cgImage)
+        } catch {
+            NSLog("オリジナル画像生成エラー: %@", "\(error)")
+            return nil
+        }
+    }
+    
 
     private func startWeightedScoreLoad(for asset: AVAsset) {
 #if canImport(VideoPickerScoring)
@@ -160,29 +310,15 @@ final class VideoScoringViewModel: ObservableObject {
 #endif
     }
 
-    private func generateImage(with generator: AVAssetImageGenerator, at time: CMTime) async throws -> UIImage {
-        try Task.checkCancellation()
-        let cgImage = try await withCheckedThrowingContinuation { continuation in
-            generator.generateCGImageAsynchronously(for: time) { cgImage, _, error in
-                if let cgImage {
-                    continuation.resume(returning: cgImage)
-                } else {
-                    continuation.resume(throwing: error ?? NSError(domain: "ImageGenerator", code: 1))
-                }
-            }
-        }
-        try Task.checkCancellation()
-        return UIImage(cgImage: cgImage)
-    }
 
-    private func score(for image: UIImage, weightedScore: Int?, mode: ScoringMode) -> Int {
+    private nonisolated func score(for image: UIImage, weightedScore: Int?, mode: ScoringMode) -> Int {
         let frameScore = fallbackScore(for: image, mode: mode)
         guard let weightedScore else { return frameScore }
         let blended = (Double(weightedScore) * 0.7 + Double(frameScore) * 0.3).rounded()
         return min(100, max(0, Int(blended)))
     }
 
-    private func fallbackScore(for image: UIImage, mode: ScoringMode) -> Int {
+    private nonisolated func fallbackScore(for image: UIImage, mode: ScoringMode) -> Int {
         guard let cgImage = image.cgImage else { return 0 }
         let targetSize = 32
         let bytesPerPixel = 4
@@ -265,7 +401,7 @@ final class VideoScoringViewModel: ObservableObject {
         return min(100, max(0, score))
     }
     
-    private func calculateOverexposurePenalty(luminance: [Double]) -> Double {
+    private nonisolated func calculateOverexposurePenalty(luminance: [Double]) -> Double {
         // 白飛び（過露出）を検出
         let overexposedCount = luminance.filter { $0 > 0.9 }.count
         let overexposedRatio = Double(overexposedCount) / Double(luminance.count)
@@ -279,7 +415,7 @@ final class VideoScoringViewModel: ObservableObject {
         return 0.0
     }
     
-    private func calculatePersonHeuristic(luminance: [Double], targetSize: Int) -> Double {
+    private nonisolated func calculatePersonHeuristic(luminance: [Double], targetSize: Int) -> Double {
         // 中央部分に人物がいる可能性をヒューリスティックに計算（改良版）
         let centerX = targetSize / 2
         let centerY = targetSize / 2
