@@ -46,7 +46,7 @@ struct ContentView: View {
                                         }
                                     }
                                     .padding(12)
-                                    .padding(.bottom, 60) // バナー広告の高さ分だけ余白を追加
+                                    .padding(.bottom, 90) // バナー広告の最大高さ分の余白を追加
                                 }
                             }
                         }
@@ -63,15 +63,17 @@ struct ContentView: View {
                                 .background(Circle())
                                 .shadow(radius: 6)
                                 .padding(.trailing, 20)
-                                .padding(.bottom, 80) // バナー高さ(60) + マージン(20)
+                                .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
                         }
                         .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
                     }
                     
                     // ====== 下部バナー広告 ======
-                    AdMobAnchoredAdaptiveBannerView(adUnitID: "ca-app-pub-5859864934932113/4765758706")
-                        .frame(height: 60)
+                    // 注意: 本番リリース前に実際のAd Unit IDに変更してください
+                    AdMobAnchoredAdaptiveBannerView(adUnitID: "ca-app-pub-3940256099942544/2934735716") // テスト用ID
                         .frame(maxWidth: .infinity)
+                        .frame(minHeight: 50, maxHeight: 90) // 高さを50-60pxに制限
+                        .clipped() // 制限を超える部分をクリップ
                         .background(Color(.systemGray6))
                 }
             }
