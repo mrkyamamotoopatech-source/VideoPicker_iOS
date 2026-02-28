@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1030234E2F5314DB00C17E4A /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 1030234D2F5314DB00C17E4A /* GoogleMobileAds */; };
 		10AEE5512F28E2DE00A720CE /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10AEE54F2F28E2CF00A720CE /* opencv2.framework */; };
 		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
 /* End PBXBuildFile section */
@@ -71,6 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1030234E2F5314DB00C17E4A /* GoogleMobileAds in Frameworks */,
 				10AEE5512F28E2DE00A720CE /* opencv2.framework in Frameworks */,
 				D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */,
 			);
@@ -143,6 +145,7 @@
 			name = VideoPicker;
 			packageProductDependencies = (
 				D0C8A5D02F7A123400000003 /* VideoPickerScoring */,
+				1030234D2F5314DB00C17E4A /* GoogleMobileAds */,
 			);
 			productName = VideoPicker;
 			productReference = 10735AEC2F1F5135007678C7 /* VideoPicker.app */;
@@ -229,6 +232,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "ios/VideoPickerScoring" */,
+				1030234A2F53100300C17E4A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 10735AED2F1F5135007678C7 /* Products */;
@@ -442,10 +446,10 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VideoPicker/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "V-Snap";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -478,10 +482,10 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VideoPicker/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "V-Snap";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = NO;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -619,7 +623,23 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		1030234A2F53100300C17E4A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		1030234D2F5314DB00C17E4A /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1030234A2F53100300C17E4A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
 		D0C8A5D02F7A123400000003 /* VideoPickerScoring */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "ios/VideoPickerScoring" */;

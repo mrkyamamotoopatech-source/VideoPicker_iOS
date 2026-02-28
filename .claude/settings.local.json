@@ -10,7 +10,9 @@
       "Bash(xcrun swiftc -parse VideoScoringViewModel.swift)",
       "Read(/Users/yamamototakayuki/develop/**)",
       "Bash(xcodebuild -project VideoPicker.xcodeproj -scheme VideoPicker -configuration Debug build)",
-      "Bash(xcrun swiftc -parse /Users/yamamototakayuki/develop/VideoPicker/VideoPicker/VideoScoringViewModel.swift)"
+      "Bash(xcrun swiftc -parse /Users/yamamototakayuki/develop/VideoPicker/VideoPicker/VideoScoringViewModel.swift)",
+      "Read(/Users/yamamototakayuki/Library/Developer/Xcode/DerivedData/VideoPicker-azpomifnjsksgvcxtyduwpykzmca/Build/Products/Debug-iphonesimulator/PackageFrameworks/**)",
+      "Read(/Users/yamamototakayuki/Library/Developer/Xcode/DerivedData/VideoPicker-azpomifnjsksgvcxtyduwpykzmca/Build/Products/Debug-iphonesimulator/PackageFrameworks/**)"
     ],
     "deny": [],
     "ask": []

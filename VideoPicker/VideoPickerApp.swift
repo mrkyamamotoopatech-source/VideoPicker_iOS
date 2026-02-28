@@ -6,10 +6,16 @@
 //
 
 import SwiftUI
+import GoogleMobileAds
 
 @main
 struct VideoPickerApp: App {
     @State private var isSplashScreenActive = false
+    
+    init() {
+        // Google Mobile Ads SDKを初期化
+        MobileAds.shared.start(completionHandler: nil)
+    }
     
     var body: some Scene {
         WindowGroup {
