@@ -229,6 +229,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				D0C8A5D02F7A123400000002 /* XCLocalSwiftPackageReference "ios/VideoPickerScoring" */,
+				1030234A2F53100300C17E4A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 10735AED2F1F5135007678C7 /* Products */;
@@ -618,6 +619,17 @@
 			relativePath = ios/VideoPickerScoring;
 		};
 /* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1030234A2F53100300C17E4A /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		D0C8A5D02F7A123400000003 /* VideoPickerScoring */ = {

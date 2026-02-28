@@ -20,48 +20,60 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ZStack(alignment: .bottomTrailing) {
-
-                // ====== 一覧エリア ======
-                VStack {
-                    if vm.items.isEmpty {
-                        Text(vm.emptyMessage)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 8) {
-                                ForEach(vm.items) { item in
-                                    Button {
-                                        pendingItem = item
-                                        showsSelectionDialog = true
-                                    } label: {
-                                        VideoThumbnailCell(item: item) { asset, size in
-                                            await vm.thumbnail(for: asset, targetSize: size)
+            ZStack {
+                VStack(spacing: 0) {
+                    // ====== メインコンテンツエリア ======
+                    ZStack(alignment: .bottomTrailing) {
+                        // ====== 一覧エリア ======
+                        VStack {
+                            if vm.items.isEmpty {
+                                Text(vm.emptyMessage)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else {
+                                ScrollView {
+                                    LazyVGrid(columns: columns, spacing: 8) {
+                                        ForEach(vm.items) { item in
+                                            Button {
+                                                pendingItem = item
+                                                showsSelectionDialog = true
+                                            } label: {
+                                                VideoThumbnailCell(item: item) { asset, size in
+                                                    await vm.thumbnail(for: asset, targetSize: size)
+                                                }
+                                            }
+                                            .buttonStyle(.plain)
                                         }
                                     }
-                                    .buttonStyle(.plain)
+                                    .padding(12)
+                                    .padding(.bottom, 60) // バナー広告の高さ分だけ余白を追加
                                 }
                             }
-                            .padding(12)
                         }
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // ====== 右下ボタン ======
-                Button {
-                    vm.requestAccessAndLoadVideos()
-                } label: {
-                    Image(systemName: "video.fill")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(Circle())
-                        .shadow(radius: 6)
-                        .padding(20)
+                        // ====== 右下ボタン ======
+                        Button {
+                            vm.requestAccessAndLoadVideos()
+                        } label: {
+                            Image(systemName: "video.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 56, height: 56)
+                                .background(Circle())
+                                .shadow(radius: 6)
+                                .padding(.trailing, 20)
+                                .padding(.bottom, 80) // バナー高さ(60) + マージン(20)
+                        }
+                        .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
+                    }
+                    
+                    // ====== 下部バナー広告 ======
+                    AdMobAnchoredAdaptiveBannerView(adUnitID: "ca-app-pub-5859864934932113/4765758706")
+                        .frame(height: 60)
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.systemGray6))
                 }
-                .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
             }
             .navigationTitle(InfoPlistStrings.string("VP_Title_Main"))
             .navigationBarTitleDisplayMode(.inline)
