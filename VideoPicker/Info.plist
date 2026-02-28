@@ -7,6 +7,13 @@
 		<string>en</string>
 		<string>ja</string>
 	</array>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>SplashBackground</string>
+		<key>UIImageName</key>
+		<string>SplashLogo</string>
+	</dict>
 	<key>VP_Accessibility_LoadVideos</key>
 	<string>Load video list</string>
 	<key>VP_Accessibility_Play</key>
