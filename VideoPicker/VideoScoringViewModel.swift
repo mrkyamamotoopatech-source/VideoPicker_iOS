@@ -50,6 +50,9 @@ enum ScoringMode {
 final class VideoScoringViewModel: ObservableObject {
     @Published var isScoring = false
     @Published var scoredFrames: [ScoredFrame] = []
+    @Published var currentProgress: Float = 0.0 // 進捗率 (0.0 - 1.0)
+    @Published var currentTime: String = "0:00" // 現在の採点時間
+    @Published var totalDuration: String = "0:00" // 動画の全長
 
     private(set) var scoringMode: ScoringMode = .person
     private var scoringTask: Task<Void, Never>?
@@ -112,6 +115,9 @@ final class VideoScoringViewModel: ObservableObject {
         defer {
             isScoring = false
             scoringTask = nil
+            // 採点完了時に進捗を100%に
+            currentProgress = 1.0
+            currentTime = totalDuration
         }
 
         let avAsset = await assetLoader.loadAVAsset(for: asset)
@@ -130,10 +136,17 @@ final class VideoScoringViewModel: ObservableObject {
         
         guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return }
         
+        // 動画の全長を取得
+        let duration = (try? await asset.load(.duration)) ?? asset.duration
+        let totalSeconds = CMTimeGetSeconds(duration)
+        
         // ビデオの向きを取得して保存
         let transform = (try? await track.load(.preferredTransform)) ?? CGAffineTransform.identity
         await MainActor.run {
             self.videoTransform = transform
+            self.totalDuration = Self.formatDuration(totalSeconds)
+            self.currentProgress = 0.0
+            self.currentTime = "0:00"
         }
         
         do {
@@ -184,30 +197,48 @@ final class VideoScoringViewModel: ObservableObject {
                     return
                 }
                 
-                autoreleasepool {
+                // autoreleasepoolからasync操作を移動
+                let sampleBufferData: (CMSampleBuffer, CMTime, CVPixelBuffer)? = autoreleasepool {
                     guard let sampleBuffer = output.copyNextSampleBuffer(),
                           let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-                        return
+                        return nil
                     }
                     
                     let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                    totalFramesRead += 1
-                    
-                    // 早期スキップ戦略: フレーム間隔調整
-                    if frameIndex % adaptiveFrameSkip != 0 {
-                        frameIndex += 1
-                        totalFramesSkipped += 1
-                        return
-                    }
-                    
-                    // PixelBufferからUIImageに変換（サムネイルサイズ）
-                    if let image = pixelBufferToUIImage(pixelBuffer, transform: transform) {
-                        currentBatch.append((image, timestamp))
-                    }
-                    
-                    frameIndex += 1
-                    framesProcessedSinceSkip += 1
+                    return (sampleBuffer, timestamp, pixelBuffer)
                 }
+                
+                guard let (sampleBuffer, timestamp, pixelBuffer) = sampleBufferData else {
+                    continue
+                }
+                
+                totalFramesRead += 1
+                
+                // 進捗更新（定期的に）
+                if totalFramesRead % 30 == 0 { // 30フレームごとに更新
+                    let currentSeconds = CMTimeGetSeconds(timestamp)
+                    await MainActor.run {
+                        if totalSeconds > 0 {
+                            self.currentProgress = Float(currentSeconds / totalSeconds)
+                            self.currentTime = Self.formatDuration(currentSeconds)
+                        }
+                    }
+                }
+                
+                // 早期スキップ戦略: フレーム間隔調整
+                if frameIndex % adaptiveFrameSkip != 0 {
+                    frameIndex += 1
+                    totalFramesSkipped += 1
+                    continue
+                }
+                
+                // PixelBufferからUIImageに変換（サムネイルサイズ）
+                if let image = pixelBufferToUIImage(pixelBuffer, transform: transform) {
+                    currentBatch.append((image, timestamp))
+                }
+                
+                frameIndex += 1
+                framesProcessedSinceSkip += 1
                 
                 // バッチが満杯になったら処理
                 if currentBatch.count >= batchSize {
@@ -827,6 +858,15 @@ final class VideoScoringViewModel: ObservableObject {
         }
         
         return hasPersonContent
+    }
+    
+    /// 秒数を分:秒形式にフォーマット
+    private static func formatDuration(_ seconds: Double) -> String {
+        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
+        let totalSeconds = Int(seconds)
+        let minutes = totalSeconds / 60
+        let remainingSeconds = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
     
     private nonisolated func calculatePersonHeuristic(luminance: [Double], targetSize: Int) -> Double {
