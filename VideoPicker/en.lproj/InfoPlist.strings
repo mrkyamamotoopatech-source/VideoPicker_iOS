@@ -11,7 +11,7 @@
 "VP_Accessibility_SaveFrame" = "Save frame";
 "VP_Accessibility_ScoringToggle" = "Toggle scoring mode";
 "VP_Accessibility_Stop" = "Stop";
-"VP_Alert_AutoPick_Message" = "Would you like to automatically pick the best frames?";
+"VP_Alert_AutoPick_Message" = "Would you like to automatically pick the best-looking photos? (Prototype)";
 "VP_Alert_Confirm_Title" = "Confirmation";
 "VP_Alert_PhotosAccess_Message" = "Allow photo library access to view your videos.";
 "VP_Alert_PhotosAccess_Title" = "Photo access required";
