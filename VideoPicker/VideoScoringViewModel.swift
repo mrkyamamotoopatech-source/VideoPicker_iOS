@@ -17,9 +17,27 @@ struct ScoredFrame: Identifiable {
     let image: UIImage
     let time: CMTime
     let score: Int
+    var isSegmentBest: Bool = false // 区間内最高得点フラグ
 
     var timeLabel: String {
         formatTimestamp(time)
+    }
+    
+    var category: String {
+        guard isSegmentBest else { return "" }
+        switch score {
+        case 90...100: return "🏆" // 金メダル
+        case 75...89:  return "🥈" // 銀メダル  
+        case 60...74:  return "🥉" // 銅メダル
+        default:       return ""
+        }
+    }
+    
+    // 区間ベストフラグを設定するヘルパー
+    func withSegmentBest(_ isBest: Bool) -> ScoredFrame {
+        var frame = self
+        frame.isSegmentBest = isBest
+        return frame
     }
 }
 
@@ -255,11 +273,21 @@ final class VideoScoringViewModel: ObservableObject {
                 }
                 
                 // 時間順でソートして最終結果を設定
-                self.scoredFrames = allFrames.sorted { CMTimeCompare($0.time, $1.time) < 0 }
+                let sortedFrames = allFrames.sorted { CMTimeCompare($0.time, $1.time) < 0 }
+                
+                // 最終的に区間ベストフラグを設定
+                print("🔧 [最終処理] 区間ベストフラグを設定中: \(sortedFrames.count)枚")
+                let maxKeepFrames = 200 // 明示的に200枚制限
+                self.scoredFrames = self.selectTimeBalancedFrames(sortedFrames, maxCount: min(maxKeepFrames, sortedFrames.count))
+                
+                // デバッグ: 星がついたフレーム数をカウント
+                let starredCount = self.scoredFrames.filter { $0.isSegmentBest }.count
+                print("⭐ [最終結果] 星付きフレーム数: \(starredCount)枚")
                 
                 // 最低限1つは表示
                 if self.scoredFrames.isEmpty && !topFrames.isEmpty {
-                    self.scoredFrames.append(topFrames.max { $0.score < $1.score }!)
+                    let bestFrame = topFrames.max { $0.score < $1.score }!.withSegmentBest(true)
+                    self.scoredFrames.append(bestFrame)
                 }
             }
             
@@ -313,7 +341,16 @@ final class VideoScoringViewModel: ObservableObject {
             let countForThisSegment = framesPerSegment + (i < extraFrames ? 1 : 0)
             let selectedFromSegment = Array(sortedSegmentFrames.prefix(countForThisSegment))
             
-            result.append(contentsOf: selectedFromSegment)
+            // 区間内の最高得点フレームにフラグを設定
+            if let bestFrame = selectedFromSegment.first {
+                let bestFrameWithFlag = bestFrame.withSegmentBest(true)
+                result.append(bestFrameWithFlag)
+                result.append(contentsOf: selectedFromSegment.dropFirst())
+                
+                print("   ⭐ 区間\(i+1)のベスト: \(bestFrame.score)点 (\(formatTimestamp(bestFrame.time))) - isSegmentBest=\(bestFrameWithFlag.isSegmentBest)")
+            } else {
+                result.append(contentsOf: selectedFromSegment)
+            }
             
             if !selectedFromSegment.isEmpty {
                 let segmentMinutes = Int(segmentStart / 60)
@@ -327,6 +364,49 @@ final class VideoScoringViewModel: ObservableObject {
         
         print("📊 [選択完了] 最終的に\(finalResult.count)枚を時間軸バランスで選択")
         return finalResult
+    }
+    
+    /// 時間軸バランスを考慮したフレーム選択（区間ベストフラグなし版）
+    private func selectTimeBalancedFramesWithoutFlag(_ frames: [ScoredFrame], maxCount: Int) -> [ScoredFrame] {
+        guard frames.count > maxCount else { return frames }
+        
+        // 動画の開始時間と終了時間を取得
+        guard let firstTime = frames.first?.time.seconds,
+              let lastTime = frames.last?.time.seconds else {
+            // フォールバック: 単純に高スコア順で選択
+            return Array(frames.sorted { $0.score > $1.score }.prefix(maxCount))
+        }
+        
+        let totalDuration = lastTime - firstTime
+        let segmentCount = min(10, maxCount / 10) // 最大10区間、最低各区間10枚
+        let segmentDuration = totalDuration / Double(segmentCount)
+        let framesPerSegment = maxCount / segmentCount
+        let extraFrames = maxCount % segmentCount
+        
+        var result: [ScoredFrame] = []
+        
+        for i in 0..<segmentCount {
+            let segmentStart = firstTime + Double(i) * segmentDuration
+            let segmentEnd = firstTime + Double(i + 1) * segmentDuration
+            
+            // 各区間のフレームを抽出
+            let segmentFrames = frames.filter { frame in
+                let frameTime = frame.time.seconds
+                return frameTime >= segmentStart && frameTime < segmentEnd
+            }
+            
+            // 区間内で高スコア順にソート
+            let sortedSegmentFrames = segmentFrames.sorted { $0.score > $1.score }
+            
+            // 各区間から指定枚数を選択（フラグ設定なし）
+            let countForThisSegment = framesPerSegment + (i < extraFrames ? 1 : 0)
+            let selectedFromSegment = Array(sortedSegmentFrames.prefix(countForThisSegment))
+            
+            result.append(contentsOf: selectedFromSegment)
+        }
+        
+        // 時間順でソートして返却
+        return result.sorted { CMTimeCompare($0.time, $1.time) < 0 }
     }
     
     private func processBatchWithEarlySkip(
@@ -397,19 +477,22 @@ final class VideoScoringViewModel: ObservableObject {
                     if frame.score >= 60 {
                         topFrames.append(frame)
                         
-                        // リアルタイムでUIを更新
+                        // リアルタイムでUIを更新（区間ベストフラグはなし）
                         await MainActor.run {
                             // 既存のscoredFramesに新しいフレームを追加
                             var currentFrames = self.scoredFrames
-                            currentFrames.append(frame)
+                            // フラグを無効化したフレームを追加
+                            var frameWithoutFlag = frame
+                            frameWithoutFlag.isSegmentBest = false
+                            currentFrames.append(frameWithoutFlag)
                             
                             // 時間の昇順でソート
                             let sortedFrames = currentFrames.sorted { CMTimeCompare($0.time, $1.time) < 0 }
                             
-                            // フレーム数を制限（メモリ管理）
+                            // フレーム数を制限（区間ベストフラグは設定しない）
                             if sortedFrames.count > maxKeep {
-                                // 時間軸バランス考慮で選択
-                                self.scoredFrames = self.selectTimeBalancedFrames(sortedFrames, maxCount: maxKeep)
+                                // 時間軸バランスを保った選択（フラグなし版）
+                                self.scoredFrames = self.selectTimeBalancedFramesWithoutFlag(sortedFrames, maxCount: maxKeep)
                             } else {
                                 self.scoredFrames = sortedFrames
                             }
@@ -462,19 +545,22 @@ final class VideoScoringViewModel: ObservableObject {
                     if frame.score >= 60 {
                         topFrames.append(frame)
                         
-                        // リアルタイムでUIを更新
+                        // リアルタイムでUIを更新（区間ベストフラグはなし）
                         await MainActor.run {
                             // 既存のscoredFramesに新しいフレームを追加
                             var currentFrames = self.scoredFrames
-                            currentFrames.append(frame)
+                            // フラグを無効化したフレームを追加
+                            var frameWithoutFlag = frame
+                            frameWithoutFlag.isSegmentBest = false
+                            currentFrames.append(frameWithoutFlag)
                             
                             // 時間の昇順でソート
                             let sortedFrames = currentFrames.sorted { CMTimeCompare($0.time, $1.time) < 0 }
                             
-                            // フレーム数を制限（メモリ管理）
+                            // フレーム数を制限（区間ベストフラグは設定しない）
                             if sortedFrames.count > maxKeep {
-                                // 時間軸バランス考慮で選択
-                                self.scoredFrames = self.selectTimeBalancedFrames(sortedFrames, maxCount: maxKeep)
+                                // 時間軸バランスを保った選択（フラグなし版）
+                                self.scoredFrames = self.selectTimeBalancedFramesWithoutFlag(sortedFrames, maxCount: maxKeep)
                             } else {
                                 self.scoredFrames = sortedFrames
                             }
