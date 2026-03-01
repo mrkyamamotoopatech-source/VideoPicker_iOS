@@ -274,6 +274,61 @@ final class VideoScoringViewModel: ObservableObject {
         let adaptiveFrameSkip: Int
     }
     
+    /// 時間軸バランスを考慮したフレーム選択
+    private func selectTimeBalancedFrames(_ frames: [ScoredFrame], maxCount: Int) -> [ScoredFrame] {
+        guard frames.count > maxCount else { return frames }
+        
+        // 動画の開始時間と終了時間を取得
+        guard let firstTime = frames.first?.time.seconds,
+              let lastTime = frames.last?.time.seconds else {
+            // フォールバック: 単純に高スコア順で選択
+            return Array(frames.sorted { $0.score > $1.score }.prefix(maxCount))
+        }
+        
+        let totalDuration = lastTime - firstTime
+        let segmentCount = min(10, maxCount / 10) // 最大10区間、最低各区間10枚
+        let segmentDuration = totalDuration / Double(segmentCount)
+        let framesPerSegment = maxCount / segmentCount
+        let extraFrames = maxCount % segmentCount
+        
+        var result: [ScoredFrame] = []
+        
+        print("🎯 [時間軸バランス選択] 総フレーム数: \(frames.count) → \(maxCount)枚に制限")
+        print("   区間数: \(segmentCount), 区間あたり: \(framesPerSegment)枚")
+        
+        for i in 0..<segmentCount {
+            let segmentStart = firstTime + Double(i) * segmentDuration
+            let segmentEnd = firstTime + Double(i + 1) * segmentDuration
+            
+            // 各区間のフレームを抽出
+            let segmentFrames = frames.filter { frame in
+                let frameTime = frame.time.seconds
+                return frameTime >= segmentStart && frameTime < segmentEnd
+            }
+            
+            // 区間内で高スコア順にソート
+            let sortedSegmentFrames = segmentFrames.sorted { $0.score > $1.score }
+            
+            // 各区間から指定枚数を選択（最後の区間は余剰分も追加）
+            let countForThisSegment = framesPerSegment + (i < extraFrames ? 1 : 0)
+            let selectedFromSegment = Array(sortedSegmentFrames.prefix(countForThisSegment))
+            
+            result.append(contentsOf: selectedFromSegment)
+            
+            if !selectedFromSegment.isEmpty {
+                let segmentMinutes = Int(segmentStart / 60)
+                let segmentSeconds = Int(segmentStart.truncatingRemainder(dividingBy: 60))
+                print("   区間\(i+1) (\(segmentMinutes):\(String(format: "%02d", segmentSeconds))~): \(selectedFromSegment.count)枚選択 (最高\(selectedFromSegment.first?.score ?? 0)点)")
+            }
+        }
+        
+        // 時間順でソートして返却
+        let finalResult = result.sorted { CMTimeCompare($0.time, $1.time) < 0 }
+        
+        print("📊 [選択完了] 最終的に\(finalResult.count)枚を時間軸バランスで選択")
+        return finalResult
+    }
+    
     private func processBatchWithEarlySkip(
         _ batch: [(UIImage, CMTime)], 
         topFrames: inout [ScoredFrame], 
@@ -353,10 +408,8 @@ final class VideoScoringViewModel: ObservableObject {
                             
                             // フレーム数を制限（メモリ管理）
                             if sortedFrames.count > maxKeep {
-                                // 高スコアのフレームを優先的に保持（時系列は維持）
-                                let highScoreFrames = sortedFrames.sorted { $0.score > $1.score }.prefix(maxKeep)
-                                // 再度時間順でソート
-                                self.scoredFrames = Array(highScoreFrames).sorted { CMTimeCompare($0.time, $1.time) < 0 }
+                                // 時間軸バランス考慮で選択
+                                self.scoredFrames = self.selectTimeBalancedFrames(sortedFrames, maxCount: maxKeep)
                             } else {
                                 self.scoredFrames = sortedFrames
                             }
@@ -420,10 +473,8 @@ final class VideoScoringViewModel: ObservableObject {
                             
                             // フレーム数を制限（メモリ管理）
                             if sortedFrames.count > maxKeep {
-                                // 高スコアのフレームを優先的に保持（時系列は維持）
-                                let highScoreFrames = sortedFrames.sorted { $0.score > $1.score }.prefix(maxKeep)
-                                // 再度時間順でソート
-                                self.scoredFrames = Array(highScoreFrames).sorted { CMTimeCompare($0.time, $1.time) < 0 }
+                                // 時間軸バランス考慮で選択
+                                self.scoredFrames = self.selectTimeBalancedFrames(sortedFrames, maxCount: maxKeep)
                             } else {
                                 self.scoredFrames = sortedFrames
                             }
