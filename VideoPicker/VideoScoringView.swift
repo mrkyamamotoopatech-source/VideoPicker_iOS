@@ -28,8 +28,33 @@ struct VideoScoringView: View {
     var body: some View {
         VStack(spacing: 16) {
             if viewModel.isScoring {
-                ProgressView(InfoPlistStrings.string("VP_Scoring_InProgress"))
-                    .padding(.top, 24)
+                VStack(spacing: 12) {
+                    Text(InfoPlistStrings.string("VP_Scoring_InProgress"))
+                        .font(.headline)
+                    
+                    VStack(spacing: 8) {
+                        // プログレスバー
+                        ProgressView(value: viewModel.currentProgress, total: 1.0)
+                            .progressViewStyle(LinearProgressViewStyle())
+                            .scaleEffect(x: 1, y: 2, anchor: .center) // 高さを2倍に
+                        
+                        // 時間表示
+                        HStack {
+                            Text(viewModel.currentTime)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            
+                            Spacer()
+                            
+                            Text(viewModel.totalDuration)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                    .padding(.horizontal, 32)
+                }
+                .padding(.top, 24)
             }
 
             if viewModel.scoredFrames.isEmpty && !viewModel.isScoring {
@@ -62,7 +87,7 @@ struct VideoScoringView: View {
                                 }
                                 .background(Color.black.opacity(0.05))
                                 .overlay(alignment: .topLeading) {
-                                    if frame.score >= 80 {
+                                    if frame.isSegmentBest {
                                         Image(systemName: "star.fill")
                                             .font(.caption.weight(.bold))
                                             .foregroundStyle(.yellow)
