@@ -6,6 +6,7 @@
 //
 
 @preconcurrency import AVKit
+import AVFoundation
 import Photos
 import UIKit
 
@@ -32,10 +33,19 @@ final class VideoDetailViewModel: ObservableObject {
 
     func loadPlayer() async {
         guard player == nil else { return }
+        
+        // 音声セッションを設定
+        await configureAudioSession()
+        
         let avAsset = await assetLoader.loadAVAsset(for: asset)
         self.avAsset = avAsset
         let playerItem = AVPlayerItem(asset: avAsset)
         let newPlayer = AVPlayer(playerItem: playerItem)
+        
+        // 音声出力を有効化
+        newPlayer.isMuted = false
+        newPlayer.volume = 1.0
+        
         player = newPlayer
         observePlayer(newPlayer)
     }
@@ -51,6 +61,16 @@ final class VideoDetailViewModel: ObservableObject {
 
     func stop() {
         player?.pause()
+        deactivateAudioSession()
+    }
+    
+    private func deactivateAudioSession() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            NSLog("音声セッション非アクティブ化エラー: %@", "\(error)")
+        }
     }
 
     func seek(by seconds: Double) {
@@ -73,6 +93,16 @@ final class VideoDetailViewModel: ObservableObject {
         return await saveFrame(at: time, from: avAsset)
     }
 
+    private func configureAudioSession() async {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setActive(true, options: [])
+        } catch {
+            NSLog("音声セッション設定エラー: %@", "\(error)")
+        }
+    }
+    
     private func observePlayer(_ player: AVPlayer) {
         statusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
             Task { @MainActor in
