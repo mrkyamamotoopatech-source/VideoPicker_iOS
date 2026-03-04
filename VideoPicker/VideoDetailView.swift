@@ -34,6 +34,9 @@ struct VideoDetailView: View {
         }
         .navigationTitle(InfoPlistStrings.string("VP_Title_VideoDetail"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbarBackground(.black, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .task {
             await viewModel.loadPlayer()
         }
