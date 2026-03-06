@@ -9,6 +9,12 @@
 	</array>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-5859864934932113~9414286435</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
