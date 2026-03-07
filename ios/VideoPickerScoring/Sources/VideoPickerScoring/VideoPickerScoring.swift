@@ -68,7 +68,7 @@ public final class VideoPickerScoring {
 
     public func analyze(frames: [FrameInput]) throws -> VideoQualityAggregate {
         Self.logger.info("Person blur source: built-in scoring (no external scores provided).")
-        Self.logger.info("🔍 [VideoPickerScoring] OpenCVフレームワーク: 内蔵採点モード（OpenCV未使用）")
+        Self.logger.info("🔍 [VideoPickerScoring] C++品質評価: 内蔵採点モード（基本品質指標のみ）")
         guard !frames.isEmpty else {
             throw VideoPickerScoringError.emptyFrames
         }
@@ -137,7 +137,7 @@ public final class VideoPickerScoring {
 
     public func analyze(frames: [FrameInput], personBlurScores: [Float]) throws -> VideoQualityAggregate {
         Self.logger.info("Person blur source: external scores provided by app. count=\(personBlurScores.count)")
-        Self.logger.info("🎯 [VideoPickerScoring] OpenCVフレームワーク: 外部person_blurスコア使用（OpenCV連携モード）")
+        Self.logger.info("🎯 [VideoPickerScoring] C++品質評価: 外部person_blurスコア使用（OpenCV連携モード）")
         guard !frames.isEmpty else {
             throw VideoPickerScoringError.emptyFrames
         }

@@ -102,6 +102,7 @@ struct VideoScoringView: View {
                             .buttonStyle(.plain)
                         }
                     }
+                    .drawingGroup()
                     .padding(16)
                 }
             }
