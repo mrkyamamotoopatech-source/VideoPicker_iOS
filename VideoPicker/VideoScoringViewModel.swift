@@ -192,7 +192,7 @@ final class VideoScoringViewModel: ObservableObject {
             let reader = try AVAssetReader(asset: asset)
             
             // サムネイルサイズで処理（メモリ効率化）
-            let thumbnailSize: CGFloat = 128
+            let thumbnailSize: CGFloat = 256
             let outputSettings: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: thumbnailSize,
@@ -896,13 +896,13 @@ final class VideoScoringViewModel: ObservableObject {
         }
         
         let laplacianAverage = laplacianCount > 0 ? laplacianSum / laplacianCount : 0
-        let edge = min(laplacianAverage / 0.2, 1) // 顔領域では高い品質基準を適用
+        let edge = min(laplacianAverage / 0.15, 1) // 顔領域ではより厳しい品質基準を適用
         
         // 白飛び検出
         let overexposurePenalty = calculateOverexposurePenalty(luminance: luminance)
         
         // 顔領域のシャープネス評価（より厳格）
-        let sharpnessScore = min(edge / 0.3, 1.0)
+        let sharpnessScore = min(edge / 0.25, 1.0)
         
         let quality: Double
         switch mode {
