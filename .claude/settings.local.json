@@ -13,7 +13,15 @@
       "Bash(xcrun swiftc -parse /Users/yamamototakayuki/develop/VideoPicker/VideoPicker/VideoScoringViewModel.swift)",
       "Read(/Users/yamamototakayuki/Library/Developer/Xcode/DerivedData/VideoPicker-azpomifnjsksgvcxtyduwpykzmca/Build/Products/Debug-iphonesimulator/PackageFrameworks/**)",
       "Read(/Users/yamamototakayuki/Library/Developer/Xcode/DerivedData/VideoPicker-azpomifnjsksgvcxtyduwpykzmca/Build/Products/Debug-iphonesimulator/PackageFrameworks/**)",
-      "Bash(xcrun swiftc -parse /Users/yamamototakayuki/develop/VideoPicker/VideoPicker/VideoScoringView.swift)"
+      "Bash(xcrun swiftc -parse /Users/yamamototakayuki/develop/VideoPicker/VideoPicker/VideoScoringView.swift)",
+      "Bash(pod install)",
+      "Bash(xcodebuild -workspace VideoPicker.xcworkspace -scheme VideoPicker -configuration Debug build)",
+      "Bash(xcodebuild -workspace VideoPicker.xcworkspace -scheme VideoPicker -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(xcodebuild -workspace VideoPicker.xcworkspace -scheme VideoPicker -destination 'platform=iOS Simulator,id=162576E8-F2F0-4D55-9FEC-DB7FB03C4E21' build)",
+      "Bash(xcrun swiftc -parse /Users/yamamototakayuki/develop/VideoPicker/VideoPicker/VideoScoringViewModel.swift -F /Users/yamamototakayuki/develop/VideoPicker/Pods/MediaPipeTasksVision/frameworks -F /Users/yamamototakayuki/develop/VideoPicker/Pods/MediaPipeTasksCommon/frameworks)",
+      "Bash(pod install --repo-update)",
+      "Bash(xcodebuild -resolvePackageDependencies -workspace VideoPicker.xcworkspace -scheme VideoPicker)",
+      "Bash(xcodebuild -workspace VideoPicker.xcworkspace -scheme VideoPicker build -destination 'platform=iOS Simulator,id=162576E8-F2F0-4D55-9FEC-DB7FB03C4E21')"
     ],
     "deny": [],
     "ask": []

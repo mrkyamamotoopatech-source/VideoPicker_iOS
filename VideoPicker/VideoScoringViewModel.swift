@@ -8,6 +8,9 @@
 import AVFoundation
 import Photos
 import UIKit
+#if canImport(MediaPipeTasksVision)
+import MediaPipeTasksVision
+#endif
 #if canImport(VideoPickerScoring)
 import VideoPickerScoring
 #endif
@@ -57,6 +60,16 @@ final class VideoScoringViewModel: ObservableObject {
     private(set) var scoringMode: ScoringMode = .person
     private var scoringTask: Task<Void, Never>?
     private var weightedScore: Int?
+    
+    // MediaPipeの顔検出器と姿勢検出器
+#if canImport(MediaPipeTasksVision)
+    private var faceDetector: FaceDetector?
+    private var poseLandmarker: PoseLandmarker?
+#endif
+    
+    // 顔検出成功率の統計
+    private var faceDetectionStats = (attempted: 0, succeeded: 0)
+    
 #if canImport(VideoPickerScoring)
     private var weightedScoreTask: Task<Int?, Never>?
 #endif
@@ -72,10 +85,61 @@ final class VideoScoringViewModel: ObservableObject {
     init(asset: PHAsset, assetLoader: VideoAssetLoader = VideoAssetLoader()) {
         self.asset = asset
         self.assetLoader = assetLoader
+        
+        // MediaPipeの検出器を初期化
+        self.initializeFaceDetector()
+        self.initializePoseLandmarker()
+        
 #if canImport(VideoPickerScoring)
         NSLog("VideoPickerScoring canImport = true")
 #else
         NSLog("VideoPickerScoring canImport = false")
+#endif
+    }
+    
+    private func initializeFaceDetector() {
+#if canImport(MediaPipeTasksVision)
+        do {
+            let options = FaceDetectorOptions()
+            options.runningMode = .image
+            options.minDetectionConfidence = 0.5
+            options.minSuppressionThreshold = 0.3
+            
+            faceDetector = try FaceDetector(options: options)
+            print("🎯 [MediaPipe初期化] 顔検出器の初期化が成功しました")
+        } catch {
+            print("❌ [MediaPipe初期化] 顔検出器の初期化に失敗: \(error)")
+            faceDetector = nil
+        }
+#else
+        print("⚠️ [MediaPipe初期化] MediaPipeTasksVisionが利用できません - フォールバックのみ使用")
+#endif
+    }
+    
+    private func initializePoseLandmarker() {
+#if canImport(MediaPipeTasksVision)
+        do {
+            guard let modelPath = Bundle.main.path(forResource: "pose_landmarker_lite", ofType: "task") else {
+                print("⚠️ [MediaPipe初期化] pose_landmarker_lite.taskファイルが見つかりません")
+                poseLandmarker = nil
+                return
+            }
+            
+            let options = PoseLandmarkerOptions()
+            options.baseOptions.modelAssetPath = modelPath
+            options.runningMode = .image
+            options.minPoseDetectionConfidence = 0.5
+            options.minPosePresenceConfidence = 0.5
+            options.minTrackingConfidence = 0.5
+            
+            poseLandmarker = try PoseLandmarker(options: options)
+            print("🎯 [MediaPipe初期化] 姿勢検出器の初期化が成功しました")
+        } catch {
+            print("❌ [MediaPipe初期化] 姿勢検出器の初期化に失敗: \(error)")
+            poseLandmarker = nil
+        }
+#else
+        print("⚠️ [MediaPipe初期化] MediaPipeTasksVisionが利用できません - 姿勢検出なし")
 #endif
     }
 
@@ -84,6 +148,8 @@ final class VideoScoringViewModel: ObservableObject {
         cancelScoring()
         scoringMode = mode
         scoredFrames = []
+        // 統計をリセット
+        faceDetectionStats = (attempted: 0, succeeded: 0)
         startScoring()
     }
 
@@ -112,6 +178,8 @@ final class VideoScoringViewModel: ObservableObject {
             return
         }
         isScoring = true
+        // 統計をリセット
+        faceDetectionStats = (attempted: 0, succeeded: 0)
         defer {
             isScoring = false
             scoringTask = nil
@@ -153,7 +221,7 @@ final class VideoScoringViewModel: ObservableObject {
             let reader = try AVAssetReader(asset: asset)
             
             // サムネイルサイズで処理（メモリ効率化）
-            let thumbnailSize: CGFloat = 128
+            let thumbnailSize: CGFloat = 256
             let outputSettings: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: thumbnailSize,
@@ -215,7 +283,7 @@ final class VideoScoringViewModel: ObservableObject {
                 totalFramesRead += 1
                 
                 // 進捗更新（定期的に）
-                if totalFramesRead % 30 == 0 { // 30フレームごとに更新
+                if totalFramesRead % 100 == 0 { // 100フレームごとに更新
                     let currentSeconds = CMTimeGetSeconds(timestamp)
                     await MainActor.run {
                         if totalSeconds > 0 {
@@ -244,7 +312,7 @@ final class VideoScoringViewModel: ObservableObject {
                 if currentBatch.count >= batchSize {
                     totalFramesProcessed += currentBatch.count
                     
-                    let (processedBatch, skipInfo) = await processBatchWithEarlySkip(
+                    let (_, skipInfo) = await processBatchWithEarlySkip(
                         currentBatch, 
                         topFrames: &topFrames, 
                         maxKeep: maxKeepFrames,
@@ -298,7 +366,7 @@ final class VideoScoringViewModel: ObservableObject {
                 let existingTimes = Set(self.scoredFrames.map { $0.time })
                 
                 for frame in topFrames {
-                    if frame.score >= 60 && !existingTimes.contains(frame.time) {
+                    if frame.score >= 50 && !existingTimes.contains(frame.time) {
                         allFrames.append(frame)
                     }
                 }
@@ -320,6 +388,14 @@ final class VideoScoringViewModel: ObservableObject {
                     let bestFrame = topFrames.max { $0.score < $1.score }!.withSegmentBest(true)
                     self.scoredFrames.append(bestFrame)
                 }
+                
+                // 最終的な顔検出成功率を出力
+#if canImport(MediaPipeTasksVision)
+                if self.faceDetectionStats.attempted > 0 {
+                    let finalSuccessRate = Double(self.faceDetectionStats.succeeded) / Double(self.faceDetectionStats.attempted) * 100
+                    print("🎯 [顔検出最終統計] 総処理フレーム: \(self.faceDetectionStats.attempted), 最終成功率: \(String(format: "%.1f", finalSuccessRate))%")
+                }
+#endif
             }
             
         } catch {
@@ -462,17 +538,19 @@ final class VideoScoringViewModel: ObservableObject {
             for (image, time) in batch {
                 group.addTask { [weak self] in
                     guard let self = self else { return (frame: nil, isFastSkip: false) }
-                    return autoreleasepool {
-                        // 早期スキップ戦略: 人物モードで人物がいない場合は50点で即リターン
-                        if currentScoringMode == .person && !self.hasPersonLikeContent(image) {
-                            let timestamp = CMTimeGetSeconds(time)
-                            print("🏃‍♀️ [人物なしスキップ] \(String(format: "%.2f", timestamp))秒 → 50点")
-                            return (frame: ScoredFrame(image: image, time: time, score: 50), isFastSkip: true)
-                        }
-                        
-                        let score = self.score(for: image, weightedScore: currentWeightedScore, mode: currentScoringMode)
-                        return (frame: ScoredFrame(image: image, time: time, score: score), isFastSkip: false)
+                    
+                    // autoreleasepool外でasync処理を実行
+                    let (finalImage, finalTime) = autoreleasepool { (image, time) }
+                    
+                    // 早期スキップ戦略: 人物モードで人物がいない場合は50点で即リターン
+                    if currentScoringMode == .person && !self.hasPersonLikeContent(finalImage) {
+                        let timestamp = CMTimeGetSeconds(finalTime)
+                        print("🏃‍♀️ [人物なしスキップ] \(String(format: "%.2f", timestamp))秒 → 50点")
+                        return (frame: ScoredFrame(image: finalImage, time: finalTime, score: 50), isFastSkip: true)
                     }
+                    
+                    let score = await self.score(for: finalImage, weightedScore: currentWeightedScore, mode: currentScoringMode)
+                    return (frame: ScoredFrame(image: finalImage, time: finalTime, score: score), isFastSkip: false)
                 }
             }
             
@@ -504,8 +582,8 @@ final class VideoScoringViewModel: ObservableObject {
                         newAdaptiveFrameSkip = 1 // 高スコア時は全フレーム処理
                     }
                     
-                    // 60点以上のフレームのみ保持
-                    if frame.score >= 60 {
+                    // 50点以上のフレームのみ保持
+                    if frame.score >= 50 {
                         topFrames.append(frame)
                         
                         // リアルタイムでUIを更新（区間ベストフラグはなし）
@@ -562,18 +640,20 @@ final class VideoScoringViewModel: ObservableObject {
             for (image, time) in batch {
                 group.addTask { [weak self] in
                     guard let self = self else { return nil }
-                    return autoreleasepool {
-                        let score = self.score(for: image, weightedScore: currentWeightedScore, mode: currentScoringMode)
-                        return ScoredFrame(image: image, time: time, score: score)
-                    }
+                    
+                    // autoreleasepool外でasync処理を実行
+                    let (finalImage, finalTime) = autoreleasepool { (image, time) }
+                    
+                    let score = await self.score(for: finalImage, weightedScore: currentWeightedScore, mode: currentScoringMode)
+                    return ScoredFrame(image: finalImage, time: finalTime, score: score)
                 }
             }
             
             // 結果を収集してリアルタイムで表示
             for await result in group {
                 if let frame = result {
-                    // 60点以上のフレームのみ保持
-                    if frame.score >= 60 {
+                    // 50点以上のフレームのみ保持
+                    if frame.score >= 50 {
                         topFrames.append(frame)
                         
                         // リアルタイムでUIを更新（区間ベストフラグはなし）
@@ -678,11 +758,391 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 
-    private nonisolated func score(for image: UIImage, weightedScore: Int?, mode: ScoringMode) -> Int {
-        let frameScore = fallbackScore(for: image, mode: mode)
-        guard let weightedScore else { return frameScore }
-        let blended = (Double(weightedScore) * 0.7 + Double(frameScore) * 0.3).rounded()
+    private func score(for image: UIImage, weightedScore: Int?, mode: ScoringMode) async -> Int {
+        // スコアリングの優先順位: 顔検出 → 姿勢検出 → フォールバック
+        var frameScore: Int?
+        
+        // 1. 顔検出ベースの評価を試行
+        frameScore = await faceBasedScore(for: image, mode: mode)
+        
+        // 2. 顔検出失敗時、人物モードなら姿勢検出を試行
+        if frameScore == nil && mode == .person {
+            frameScore = await poseBasedScore(for: image, mode: mode)
+        }
+        
+        // 3. 両方失敗時はフォールバック
+        let finalFrameScore = frameScore ?? fallbackScore(for: image, mode: mode)
+        
+        guard let weightedScore else { return finalFrameScore }
+        
+        // 人物モードではフレームスコア（顔領域Laplacian）の重みを高くする
+        let (weightedRatio, frameRatio) = mode == .person ? (0.4, 0.6) : (0.7, 0.3)
+        let blended = (Double(weightedScore) * weightedRatio + Double(finalFrameScore) * frameRatio).rounded()
         return min(100, max(0, Int(blended)))
+    }
+
+    /// MediaPipe顔検出を使用した顔領域限定のブラー評価
+    private func faceBasedScore(for image: UIImage, mode: ScoringMode) async -> Int? {
+#if canImport(MediaPipeTasksVision)
+        guard let faceDetector = faceDetector else { return nil }
+        
+        // UIImageをMPImageに変換
+        guard let mpImage = try? MPImage(uiImage: image) else {
+            print("⚠️ [顔検出評価] MPImageの変換に失敗")
+            return nil
+        }
+        
+        do {
+            // 顔検出を実行
+            let result = try faceDetector.detect(image: mpImage)
+            
+            // 統計情報を更新（MainActorで実行）
+            await MainActor.run {
+                faceDetectionStats.attempted += 1
+            }
+            
+            // 顔が検出された場合は、最も大きな顔で評価
+            if let largestFace = result.detections.max(by: { $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height }) {
+                
+                // 成功統計を更新
+                await MainActor.run {
+                    faceDetectionStats.succeeded += 1
+                    
+                    // 100フレームごとに成功率をログ出力
+                    if faceDetectionStats.attempted % 100 == 0 {
+                        let successRate = Double(faceDetectionStats.succeeded) / Double(faceDetectionStats.attempted) * 100
+                        print("📊 [顔検出統計] 処理フレーム: \(faceDetectionStats.attempted), 顔検出成功率: \(String(format: "%.1f", successRate))%")
+                    }
+                }
+                
+                print("🎯 [顔検出評価] 顔が検出されました - 顔領域でLaplacian評価を実行")
+                let faceScore = calculateFaceLaplacianScore(image: image, faceBox: largestFace.boundingBox, mode: mode)
+                print("🎯 [顔検出評価] 顔領域スコア: \(faceScore)")
+                return faceScore
+            } else {
+                // 100フレームごとに成功率をログ出力（失敗時も）
+                await MainActor.run {
+                    if faceDetectionStats.attempted % 100 == 0 {
+                        let successRate = Double(faceDetectionStats.succeeded) / Double(faceDetectionStats.attempted) * 100
+                        print("📊 [顔検出統計] 処理フレーム: \(faceDetectionStats.attempted), 顔検出成功率: \(String(format: "%.1f", successRate))%")
+                    }
+                }
+                
+                print("⚠️ [顔検出評価] 顔が検出されませんでした - フォールバックを使用")
+                return nil // フォールバックを使用
+            }
+        } catch {
+            print("❌ [顔検出評価] 顔検出処理でエラー: \(error)")
+            return nil // フォールバックを使用
+        }
+#else
+        return nil // MediaPipeが利用できない場合はフォールバック
+#endif
+    }
+    
+    /// 顔領域に限定したLaplacian評価
+    private func calculateFaceLaplacianScore(image: UIImage, faceBox: CGRect, mode: ScoringMode) -> Int {
+#if canImport(MediaPipeTasksVision)
+        guard let cgImage = image.cgImage else { return 0 }
+        
+        // 画像サイズを正規化したfaceBoxの座標を画像座標に変換
+        let imageWidth = CGFloat(cgImage.width)
+        let imageHeight = CGFloat(cgImage.height)
+        
+        let faceRect = CGRect(
+            x: faceBox.minX * imageWidth,
+            y: faceBox.minY * imageHeight,
+            width: faceBox.width * imageWidth,
+            height: faceBox.height * imageHeight
+        )
+        
+        // 顔領域を少し拡張（10%マージン）
+        let margin: CGFloat = 0.1
+        let expandedRect = CGRect(
+            x: max(0, faceRect.minX - faceRect.width * margin),
+            y: max(0, faceRect.minY - faceRect.height * margin),
+            width: min(imageWidth - faceRect.minX, faceRect.width * (1 + 2 * margin)),
+            height: min(imageHeight - faceRect.minY, faceRect.height * (1 + 2 * margin))
+        )
+        
+        // 顔領域をクロップ
+        guard let faceRegion = cgImage.cropping(to: expandedRect) else {
+            print("⚠️ [顔領域評価] 顔領域のクロップに失敗 - フォールバックスコア使用")
+            return 50 // デフォルトスコア
+        }
+        
+        // クロップした顔領域でLaplacian評価を実行
+        let targetSize = 64 // 顔領域は高解像度で処理
+        let bytesPerPixel = 4
+        let bytesPerRow = targetSize * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: targetSize * targetSize * bytesPerPixel)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        
+        guard let context = CGContext(
+            data: &pixels,
+            width: targetSize,
+            height: targetSize,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 50
+        }
+        
+        context.interpolationQuality = .high // 顔領域は高品質で処理
+        context.draw(faceRegion, in: CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+        
+        // 輝度を計算
+        var luminance = [Double](repeating: 0, count: targetSize * targetSize)
+        var sum = Double(0)
+        var sumSquares = Double(0)
+        
+        for index in 0..<targetSize * targetSize {
+            let offset = index * bytesPerPixel
+            let red = Double(pixels[offset]) / 255.0
+            let green = Double(pixels[offset + 1]) / 255.0
+            let blue = Double(pixels[offset + 2]) / 255.0
+            let value = red * 0.2126 + green * 0.7152 + blue * 0.0722
+            luminance[index] = value
+            sum += value
+            sumSquares += value * value
+        }
+        
+        let count = Double(luminance.count)
+        let average = sum / count
+        let variance = max(0, (sumSquares / count) - (average * average))
+        let contrast = min(variance / 0.05, 1)
+        
+        // 顔領域に特化したLaplacianフィルタ（より厳密）
+        var laplacianSum = Double(0)
+        var laplacianCount = Double(0)
+        
+        for y in 1..<(targetSize - 1) {
+            for x in 1..<(targetSize - 1) {
+                let center = y * targetSize + x
+                let current = luminance[center]
+                
+                // より精密なLaplacianフィルタ
+                let neighbors = [
+                    luminance[center - targetSize - 1], luminance[center - targetSize], luminance[center - targetSize + 1],
+                    luminance[center - 1], luminance[center + 1],
+                    luminance[center + targetSize - 1], luminance[center + targetSize], luminance[center + targetSize + 1]
+                ]
+                
+                let laplacian = abs(8.0 * current - neighbors.reduce(0, +))
+                laplacianSum += laplacian
+                laplacianCount += 1
+            }
+        }
+        
+        let laplacianAverage = laplacianCount > 0 ? laplacianSum / laplacianCount : 0
+        let edge = min(laplacianAverage / 0.15, 1) // 顔領域ではより厳しい品質基準を適用
+        
+        // 白飛び検出
+        let overexposurePenalty = calculateOverexposurePenalty(luminance: luminance)
+        
+        // 顔領域のシャープネス評価（より厳格）
+        let sharpnessScore = min(edge / 0.25, 1.0)
+        
+        let quality: Double
+        switch mode {
+        case .person:
+            // 人物モード: 顔領域のシャープネスを最重要視
+            quality = (0.1 * average) + (0.2 * contrast) + (0.7 * sharpnessScore)
+        case .scenery:
+            // 風景モード: バランス重視（顔が偶然写っている場合）
+            quality = (0.3 * average) + (0.4 * contrast) + (0.3 * sharpnessScore)
+        }
+        
+        let finalQuality = quality * (1.0 - overexposurePenalty)
+        let score = Int((finalQuality * 100).rounded())
+        
+        return min(100, max(0, score))
+#else
+        return 50 // MediaPipeが利用できない場合はデフォルトスコア
+#endif
+    }
+    
+    /// MediaPipe姿勢検出を使用した上半身領域限定のブラー評価
+    private func poseBasedScore(for image: UIImage, mode: ScoringMode) async -> Int? {
+#if canImport(MediaPipeTasksVision)
+        guard let poseLandmarker = poseLandmarker else { return nil }
+        
+        // UIImageをMPImageに変換
+        guard let mpImage = try? MPImage(uiImage: image) else {
+            print("⚠️ [姿勢検出評価] MPImageの変換に失敗")
+            return nil
+        }
+        
+        do {
+            // 姿勢検出を実行
+            let result = try poseLandmarker.detect(image: mpImage)
+            
+            // 姿勢が検出された場合は、最初の姿勢で評価
+            if let firstPose = result.landmarks.first {
+                print("🎯 [姿勢検出評価] 姿勢が検出されました - 上半身領域でLaplacian評価を実行")
+                let poseScore = calculatePoseLaplacianScore(image: image, landmarks: firstPose, mode: mode)
+                print("🎯 [姿勢検出評価] 上半身領域スコア: \(poseScore)")
+                return poseScore
+            } else {
+                print("⚠️ [姿勢検出評価] 姿勢が検出されませんでした - フォールバックを使用")
+                return nil // フォールバックを使用
+            }
+        } catch {
+            print("❌ [姿勢検出評価] 姿勢検出処理でエラー: \(error)")
+            return nil // フォールバックを使用
+        }
+#else
+        return nil // MediaPipeが利用できない場合はフォールバック
+#endif
+    }
+    
+    /// 姿勢ランドマークに基づく上半身領域のLaplacian評価
+    private func calculatePoseLaplacianScore(image: UIImage, landmarks: [NormalizedLandmark], mode: ScoringMode) -> Int {
+#if canImport(MediaPipeTasksVision)
+        guard let cgImage = image.cgImage else { return 50 }
+        
+        // 画像サイズ
+        let imageWidth = CGFloat(cgImage.width)
+        let imageHeight = CGFloat(cgImage.height)
+        
+        // 上半身の主要ランドマーク（肩、腰）のインデックス
+        // MediaPipe Poseランドマーク: 11=左肩, 12=右肩, 23=左腰, 24=右腰
+        let leftShoulder = landmarks.count > 11 ? landmarks[11] : nil
+        let rightShoulder = landmarks.count > 12 ? landmarks[12] : nil
+        let leftHip = landmarks.count > 23 ? landmarks[23] : nil
+        let rightHip = landmarks.count > 24 ? landmarks[24] : nil
+        
+        // 必要なランドマークが検出されているかチェック
+        guard let leftShoulder = leftShoulder, let rightShoulder = rightShoulder,
+              let leftHip = leftHip, let rightHip = rightHip else {
+            print("⚠️ [姿勢領域評価] 必要なランドマークが不足 - デフォルトスコア使用")
+            return 50
+        }
+        
+        // 上半身の境界を計算
+        let shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2
+        let shoulderCenterY = (leftShoulder.y + rightShoulder.y) / 2
+        let hipCenterX = (leftHip.x + rightHip.x) / 2
+        let hipCenterY = (leftHip.y + rightHip.y) / 2
+        
+        let shoulderWidth = Swift.abs(rightShoulder.x - leftShoulder.x)
+        let torsoHeight = Swift.abs(hipCenterY - shoulderCenterY)
+        
+        // 上半身領域を計算（肩から腰、横幅は肩幅の1.5倍）
+        let margin: Float = 0.25
+        let regionWidth = shoulderWidth * 1.5
+        let regionHeight = torsoHeight * 1.3 // 少し余裕を持たせる
+        
+        let regionX = shoulderCenterX - regionWidth / 2
+        let regionY = shoulderCenterY - regionHeight * margin
+        
+        // 画像座標に変換
+        let torsoRect = CGRect(
+            x: max(0, CGFloat(regionX) * imageWidth),
+            y: max(0, CGFloat(regionY) * imageHeight),
+            width: min(imageWidth, CGFloat(regionWidth) * imageWidth),
+            height: min(imageHeight, CGFloat(regionHeight) * imageHeight)
+        )
+        
+        // 上半身領域をクロップ
+        guard let torsoRegion = cgImage.cropping(to: torsoRect) else {
+            print("⚠️ [姿勢領域評価] 上半身領域のクロップに失敗 - デフォルトスコア使用")
+            return 50
+        }
+        
+        // クロップした上半身領域でLaplacian評価を実行（顔検出と同等の品質）
+        let targetSize = 64 // 顔領域と同じサイズで処理
+        let bytesPerPixel = 4
+        let bytesPerRow = targetSize * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: targetSize * targetSize * bytesPerPixel)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        
+        guard let context = CGContext(
+            data: &pixels,
+            width: targetSize,
+            height: targetSize,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return 50
+        }
+        
+        context.interpolationQuality = .high // 高品質で処理
+        context.draw(torsoRegion, in: CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
+        
+        // 輝度を計算
+        var luminance = [Double](repeating: 0, count: targetSize * targetSize)
+        var sum = Double(0)
+        var sumSquares = Double(0)
+        
+        for index in 0..<targetSize * targetSize {
+            let offset = index * bytesPerPixel
+            let red = Double(pixels[offset]) / 255.0
+            let green = Double(pixels[offset + 1]) / 255.0
+            let blue = Double(pixels[offset + 2]) / 255.0
+            let value = red * 0.2126 + green * 0.7152 + blue * 0.0722
+            luminance[index] = value
+            sum += value
+            sumSquares += value * value
+        }
+        
+        let count = Double(luminance.count)
+        let average = sum / count
+        let variance = max(0, (sumSquares / count) - (average * average))
+        let contrast = min(variance / 0.05, 1)
+        
+        // 上半身領域のLaplacianフィルタ（顔検出と同等の厳密さ）
+        var laplacianSum = Double(0)
+        var laplacianCount = Double(0)
+        
+        for y in 1..<(targetSize - 1) {
+            for x in 1..<(targetSize - 1) {
+                let center = y * targetSize + x
+                let current = luminance[center]
+                
+                // 精密なLaplacianフィルタ
+                let neighbors = [
+                    luminance[center - targetSize - 1], luminance[center - targetSize], luminance[center - targetSize + 1],
+                    luminance[center - 1], luminance[center + 1],
+                    luminance[center + targetSize - 1], luminance[center + targetSize], luminance[center + targetSize + 1]
+                ]
+                
+                let laplacian = abs(8.0 * current - neighbors.reduce(0, +))
+                laplacianSum += laplacian
+                laplacianCount += 1
+            }
+        }
+        
+        let laplacianAverage = laplacianCount > 0 ? laplacianSum / laplacianCount : 0
+        let edge = min(laplacianAverage / 0.18, 1) // 顔検出よりわずかに緩い基準
+        
+        // 白飛び検出
+        let overexposurePenalty = calculateOverexposurePenalty(luminance: luminance)
+        
+        // 上半身のシャープネス評価
+        let sharpnessScore = min(edge / 0.28, 1.0) // 顔検出よりわずかに緩い基準
+        
+        let quality: Double
+        switch mode {
+        case .person:
+            // 人物モード: 上半身のシャープネスを重要視（顔より少し重みを下げる）
+            quality = (0.15 * average) + (0.25 * contrast) + (0.6 * sharpnessScore)
+        case .scenery:
+            // 風景モード: この関数は呼ばれないが、念のため
+            quality = (0.3 * average) + (0.4 * contrast) + (0.3 * sharpnessScore)
+        }
+        
+        let finalQuality = quality * (1.0 - overexposurePenalty)
+        let score = Int((finalQuality * 100).rounded())
+        
+        return min(100, max(0, score))
+#else
+        return 50 // MediaPipeが利用できない場合はデフォルトスコア
+#endif
     }
 
     private nonisolated func fallbackScore(for image: UIImage, mode: ScoringMode) -> Int {
@@ -770,7 +1230,7 @@ final class VideoScoringViewModel: ObservableObject {
             quality = (0.4 * average) + (0.4 * contrast) + (0.2 * sharpnessScore)
         }
         
-        let score = 55 + Int((quality * 45).rounded())
+        let score = Int((quality * 100).rounded())
         return min(100, max(0, score))
     }
     
@@ -954,7 +1414,7 @@ final class VideoScoringViewModel: ObservableObject {
             var config = VideoPickerScoring.defaultConfig()
             config.log_frame_details = 1
             let scorer = try VideoPickerScoring(config: config)
-            print("📊 [VideoScoring] OpenCVによる動画採点を開始: モード=\(mode == .person ? "人物検出" : "風景")")
+            print("📊 [VideoScoring] 動画採点を開始: モード=\(mode == .person ? "人物検出" : "風景") - MediaPipe顔検出 + C++品質評価")
 
             let chunkSize = 12
             var frames: [FrameInput] = []
@@ -996,7 +1456,7 @@ final class VideoScoringViewModel: ObservableObject {
                     print("🎯 [PersonMode] フレーム\(frames.count)枚の採点完了 - person_blur含む総合採点")
                 case .scenery:
                     result = try scorer.analyze(frames: frames)
-                    print("🌅 [SceneryMode] フレーム\(frames.count)枚の採点完了 - OpenCVなしの基本採点")
+                    print("🌅 [SceneryMode] フレーム\(frames.count)枚の採点完了 - C++基本品質評価")
                 }
                 
                 // 採点結果の詳細ログ
@@ -1049,10 +1509,10 @@ final class VideoScoringViewModel: ObservableObject {
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
             let score = Self.weightedScore(from: meanItems, mode: mode)
             
-            // OpenCV使用状況の最終ログ
+            // 採点システム使用状況の最終ログ
             let hasPersonBlur = meanItems.contains { $0.id == "person_blur" }
             print("✅ [動画採点完了] モード: \(mode == .person ? "人物検出" : "風景"), 総フレーム数: \(totalFrames)")
-            print("🔍 [OpenCV状況] person_blur指標: \(hasPersonBlur ? "有効" : "無効") - OpenCV\(hasPersonBlur ? "使用中" : "未使用")")
+            print("🔍 [採点システム] person_blur指標: \(hasPersonBlur ? "有効" : "無効") - C++ライブラリ\(hasPersonBlur ? "＋OpenCV使用中" : "のみ使用")")
             print("🏆 [最終スコア] 加重スコア: \(score ?? 0)")
             
             Self.logScoringDetails(items: meanItems, weightedScore: score, mode: mode)
