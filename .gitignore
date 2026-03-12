@@ -38,3 +38,5 @@ ios/Frameworks/opencv2.framework/
 
 # Android/Gradle
 android/videopicker-scoring/.gradle/
+Pods/
+VideoPicker.xcworkspace/
