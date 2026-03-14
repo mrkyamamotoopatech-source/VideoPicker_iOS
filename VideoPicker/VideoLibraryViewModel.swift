@@ -13,8 +13,10 @@ final class VideoLibraryViewModel: ObservableObject {
     @Published var items: [VideoItem] = []
     @Published var authorization: PHAuthorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     @Published var showDeniedAlert = false
+    @Published var showOnlyFavorites = false
 
     private let imageManager = PHCachingImageManager()
+    private var allItems: [VideoItem] = []
 
     var emptyMessage: String {
         switch authorization {
@@ -59,7 +61,7 @@ final class VideoLibraryViewModel: ObservableObject {
 
     private func loadVideos() {
         // 取り直し
-        items.removeAll()
+        allItems.removeAll()
 
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -72,10 +74,24 @@ final class VideoLibraryViewModel: ObservableObject {
         tmp.reserveCapacity(result.count)
 
         result.enumerateObjects { asset, _, _ in
-            tmp.append(VideoItem(id: asset.localIdentifier, asset: asset, duration: asset.duration))
+            tmp.append(VideoItem(id: asset.localIdentifier, asset: asset, duration: asset.duration, isFavorite: asset.isFavorite))
         }
 
-        self.items = tmp
+        self.allItems = tmp
+        applyFilter()
+    }
+    
+    func toggleFavoriteFilter() {
+        showOnlyFavorites.toggle()
+        applyFilter()
+    }
+    
+    private func applyFilter() {
+        if showOnlyFavorites {
+            items = allItems.filter { $0.isFavorite }
+        } else {
+            items = allItems
+        }
     }
 
     func thumbnail(for asset: PHAsset, targetSize: CGSize) async -> UIImage? {

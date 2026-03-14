@@ -35,6 +35,20 @@ struct VideoThumbnailCell: View {
                 .frame(width: geo.size.width, height: geo.size.height)
                 .clipped()
                 .cornerRadius(10)
+                .overlay(alignment: .topTrailing) {
+                    // お気に入りマーク
+                    if item.isFavorite {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .background(
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 20, height: 20)
+                            )
+                            .padding(6)
+                    }
+                }
 
                 Text(formatDuration(item.duration))
                     .font(.caption2)

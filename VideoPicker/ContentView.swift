@@ -53,19 +53,39 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                         // ====== 右下ボタン ======
-                        Button {
-                            vm.requestAccessAndLoadVideos()
-                        } label: {
-                            Image(systemName: "video.fill")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 56, height: 56)
-                                .background(Circle())
-                                .shadow(radius: 6)
-                                .padding(.trailing, 20)
-                                .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
+                        VStack(spacing: 12) {
+                            // お気に入りフィルタボタン
+                            if !vm.items.isEmpty {
+                                Button {
+                                    vm.toggleFavoriteFilter()
+                                } label: {
+                                    Image(systemName: vm.showOnlyFavorites ? "heart.fill" : "heart")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(vm.showOnlyFavorites ? .red : .white)
+                                        .frame(width: 48, height: 48)
+                                        .background(Circle().fill(vm.showOnlyFavorites ? .white : .gray))
+                                        .shadow(radius: 4)
+                                }
+                                .accessibilityLabel("お気に入りフィルタ")
+                            }
+                            
+                            // 動画読み込みボタン（動画が読み込まれていない時のみ表示）
+                            if vm.items.isEmpty {
+                                Button {
+                                    vm.requestAccessAndLoadVideos()
+                                } label: {
+                                    Image(systemName: "video.fill")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 56, height: 56)
+                                        .background(Circle())
+                                        .shadow(radius: 6)
+                                }
+                                .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
+                            }
                         }
-                        .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
                     }
                     
                     // ====== 下部バナー広告 ======
