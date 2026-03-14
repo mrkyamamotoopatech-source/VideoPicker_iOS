@@ -34,20 +34,27 @@ final class VideoDetailViewModel: ObservableObject {
     func loadPlayer() async {
         guard player == nil else { return }
         
-        // 音声セッションを設定
-        await configureAudioSession()
-        
+        // バックグラウンドで重い処理を実行
         let avAsset = await assetLoader.loadAVAsset(for: asset)
-        self.avAsset = avAsset
-        let playerItem = AVPlayerItem(asset: avAsset)
-        let newPlayer = AVPlayer(playerItem: playerItem)
         
-        // 音声出力を有効化
-        newPlayer.isMuted = false
-        newPlayer.volume = 1.0
+        // メインスレッドでUI更新
+        await MainActor.run {
+            self.avAsset = avAsset
+            let playerItem = AVPlayerItem(asset: avAsset)
+            let newPlayer = AVPlayer(playerItem: playerItem)
+            
+            // 音声出力を有効化
+            newPlayer.isMuted = false
+            newPlayer.volume = 1.0
+            
+            player = newPlayer
+            observePlayer(newPlayer)
+        }
         
-        player = newPlayer
-        observePlayer(newPlayer)
+        // 音声セッションを非同期で設定
+        Task.detached {
+            await self.configureAudioSession()
+        }
     }
 
     func togglePlay() {
