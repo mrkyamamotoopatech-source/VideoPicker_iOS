@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var navigationPath = NavigationPath()
     @State private var pendingItem: VideoItem?
     @State private var showsSelectionDialog = false
+    @State private var showsSettings = false
 
     // グリッドの見た目
     private let columns = [
@@ -53,19 +54,39 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                         // ====== 右下ボタン ======
-                        Button {
-                            vm.requestAccessAndLoadVideos()
-                        } label: {
-                            Image(systemName: "video.fill")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 56, height: 56)
-                                .background(Circle())
-                                .shadow(radius: 6)
-                                .padding(.trailing, 20)
-                                .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
+                        VStack(spacing: 12) {
+                            // お気に入りフィルタボタン
+                            if !vm.items.isEmpty {
+                                Button {
+                                    vm.toggleFavoriteFilter()
+                                } label: {
+                                    Image(systemName: vm.showOnlyFavorites ? "heart.fill" : "heart")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(vm.showOnlyFavorites ? .red : .white)
+                                        .frame(width: 48, height: 48)
+                                        .background(Circle().fill(vm.showOnlyFavorites ? .white : .gray))
+                                        .shadow(radius: 4)
+                                }
+                                .accessibilityLabel("お気に入りフィルタ")
+                            }
+                            
+                            // 動画読み込みボタン（動画が読み込まれていない時のみ表示）
+                            if vm.items.isEmpty {
+                                Button {
+                                    vm.requestAccessAndLoadVideos()
+                                } label: {
+                                    Image(systemName: "video.fill")
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 56, height: 56)
+                                        .background(Circle())
+                                        .shadow(radius: 6)
+                                }
+                                .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
+                            }
                         }
-                        .accessibilityLabel(InfoPlistStrings.string("VP_Accessibility_LoadVideos"))
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
                     }
                     
                     // ====== 下部バナー広告 ======
@@ -79,6 +100,17 @@ struct ContentView: View {
             }
             .navigationTitle(InfoPlistStrings.string("VP_Title_Main"))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showsSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body)
+                    }
+                    .accessibilityLabel(InfoPlistStrings.string("VP_Settings_Title"))
+                }
+            }
             .navigationDestination(for: VideoRoute.self) { route in
                 switch route {
                 case .detail(let item):
@@ -105,7 +137,10 @@ struct ContentView: View {
                     pendingItem = nil
                 }
             } message: {
-                Text(InfoPlistStrings.string("VP_Alert_AutoPick_Message"))
+                Text(InfoPlistStrings.string("VP_Alert_AutoPick_Message") + "\n\n" + InfoPlistStrings.string("VP_Alert_ProcessingTime_Message"))
+            }
+            .sheet(isPresented: $showsSettings) {
+                SettingsView()
             }
             .onAppear {
                 // 起動時に許可済みなら即ロードしても良い

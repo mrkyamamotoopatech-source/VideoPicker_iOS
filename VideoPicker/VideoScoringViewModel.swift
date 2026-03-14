@@ -46,6 +46,36 @@ enum ScoringMode {
     case scenery
 }
 
+enum ScoringQuality: Int, CaseIterable {
+    case low = 0    // 128x128 - 高速処理
+    case medium = 1 // 256x256 - バランス（デフォルト）
+    case high = 2   // 512x512 - 高精度
+    
+    var imageSize: CGFloat {
+        switch self {
+        case .low: return 128
+        case .medium: return 256
+        case .high: return 512
+        }
+    }
+    
+    var displayName: String {
+        switch self {
+        case .low: return InfoPlistStrings.string("VP_ScoringQuality_Low")
+        case .medium: return InfoPlistStrings.string("VP_ScoringQuality_Medium")
+        case .high: return InfoPlistStrings.string("VP_ScoringQuality_High")
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .low: return InfoPlistStrings.string("VP_ScoringQuality_Low_Description")
+        case .medium: return InfoPlistStrings.string("VP_ScoringQuality_Medium_Description")
+        case .high: return InfoPlistStrings.string("VP_ScoringQuality_High_Description")
+        }
+    }
+}
+
 @MainActor
 final class VideoScoringViewModel: ObservableObject {
     @Published var isScoring = false
@@ -55,6 +85,7 @@ final class VideoScoringViewModel: ObservableObject {
     @Published var totalDuration: String = "0:00" // 動画の全長
 
     private(set) var scoringMode: ScoringMode = .person
+    private(set) var scoringQuality: ScoringQuality = .medium
     private var scoringTask: Task<Void, Never>?
     private var weightedScore: Int?
 #if canImport(VideoPickerScoring)
@@ -85,6 +116,17 @@ final class VideoScoringViewModel: ObservableObject {
         scoringMode = mode
         scoredFrames = []
         startScoring()
+    }
+    
+    func updateScoringQuality(_ quality: ScoringQuality) {
+        guard quality != scoringQuality else { return }
+        scoringQuality = quality
+        // 採点中の場合は再実行
+        if isScoring {
+            cancelScoring()
+            scoredFrames = []
+            startScoring()
+        }
     }
 
     func startScoring() {
@@ -152,8 +194,8 @@ final class VideoScoringViewModel: ObservableObject {
         do {
             let reader = try AVAssetReader(asset: asset)
             
-            // サムネイルサイズで処理（メモリ効率化）
-            let thumbnailSize: CGFloat = 128
+            // 品質設定に基づいたサイズで処理
+            let thumbnailSize = scoringQuality.imageSize
             let outputSettings: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: thumbnailSize,
@@ -166,7 +208,7 @@ final class VideoScoringViewModel: ObservableObject {
             
             guard reader.startReading() else { return }
             
-            startWeightedScoreLoad(for: asset)
+            startWeightedScoreLoad(for: asset, quality: scoringQuality)
             
             // 早期スキップ戦略の状態管理
             var adaptiveFrameSkip = 1 // フレームスキップ間隔
@@ -657,13 +699,13 @@ final class VideoScoringViewModel: ObservableObject {
     }
     
 
-    private func startWeightedScoreLoad(for asset: AVAsset) {
+    private func startWeightedScoreLoad(for asset: AVAsset, quality: ScoringQuality) {
 #if canImport(VideoPickerScoring)
         weightedScoreTask?.cancel()
         weightedScore = nil
         let mode = scoringMode
         let task = Task.detached { [asset] in
-            await Self.computeWeightedScore(from: asset, mode: mode)
+            await Self.computeWeightedScore(from: asset, mode: mode, quality: quality)
         }
         weightedScoreTask = task
         Task { [weak self] in
@@ -931,14 +973,14 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 #if canImport(VideoPickerScoring)
-    private nonisolated static func computeWeightedScore(from asset: AVAsset, mode: ScoringMode) async -> Int? {
+    private nonisolated static func computeWeightedScore(from asset: AVAsset, mode: ScoringMode, quality: ScoringQuality) async -> Int? {
         if Task.isCancelled { return nil }
         guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
             return nil
         }
         do {
             let reader = try AVAssetReader(asset: asset)
-            let maxDimension: CGFloat = 128
+            let maxDimension = quality.imageSize
             let outputSettings: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: maxDimension,

@@ -11,6 +11,7 @@ struct VideoItem: Identifiable, Hashable {
     let id: String
     let asset: PHAsset
     let duration: TimeInterval
+    let isFavorite: Bool
 
     static func == (lhs: VideoItem, rhs: VideoItem) -> Bool {
         lhs.id == rhs.id

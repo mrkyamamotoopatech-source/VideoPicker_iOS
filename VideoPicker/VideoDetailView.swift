@@ -13,6 +13,7 @@ struct VideoDetailView: View {
 
     @StateObject private var viewModel: VideoDetailViewModel
     @State private var showsSaveToast = false
+    @State private var hasAppeared = false
 
     init(item: VideoItem) {
         self.item = item
@@ -37,10 +38,17 @@ struct VideoDetailView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(.black, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .task {
-            await viewModel.loadPlayer()
+        .onAppear {
+            hasAppeared = true
+            // ナビゲーションアニメーション完了を待つ
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒待機
+                guard hasAppeared else { return } // 画面が既に消えていたらキャンセル
+                await viewModel.loadPlayer()
+            }
         }
         .onDisappear {
+            hasAppeared = false
             viewModel.stop()
         }
     }
