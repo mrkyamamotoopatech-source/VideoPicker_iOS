@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "" : {
+
+    },
     "photo_library_usage_description" : {
       "extractionState" : "stale",
       "localizations" : {

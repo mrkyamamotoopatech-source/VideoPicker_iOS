@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var navigationPath = NavigationPath()
     @State private var pendingItem: VideoItem?
     @State private var showsSelectionDialog = false
+    @State private var showsSettings = false
 
     // グリッドの見た目
     private let columns = [
@@ -99,6 +100,17 @@ struct ContentView: View {
             }
             .navigationTitle(InfoPlistStrings.string("VP_Title_Main"))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showsSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body)
+                    }
+                    .accessibilityLabel(InfoPlistStrings.string("VP_Settings_Title"))
+                }
+            }
             .navigationDestination(for: VideoRoute.self) { route in
                 switch route {
                 case .detail(let item):
@@ -126,6 +138,9 @@ struct ContentView: View {
                 }
             } message: {
                 Text(InfoPlistStrings.string("VP_Alert_AutoPick_Message") + "\n\n" + InfoPlistStrings.string("VP_Alert_ProcessingTime_Message"))
+            }
+            .sheet(isPresented: $showsSettings) {
+                SettingsView()
             }
             .onAppear {
                 // 起動時に許可済みなら即ロードしても良い
