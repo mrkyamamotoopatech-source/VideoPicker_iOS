@@ -13,24 +13,20 @@ struct AdMobConfig {
     
     // アプリがテストモードかどうかを判定
     private static var isTestMode: Bool {
-        // App Store Connect、TestFlightからのインストールの場合はfalse
         guard let appStoreReceiptURL = Bundle.main.appStoreReceiptURL else { return true }
         let receiptURLString = appStoreReceiptURL.path
         
-        // App Store、TestFlightの場合
-        if receiptURLString.contains("/Applications/") || receiptURLString.contains("CoreSimulator") {
-            return true // シミュレータやXcodeからの直接インストール
-        }
+        // シミュレータ
+        if receiptURLString.contains("CoreSimulator") { return true }
         
-        if receiptURLString.contains("StoreKit/sandboxReceipt") {
-            return false // TestFlight
-        }
+        // TestFlight
+        if receiptURLString.contains("sandboxReceipt") { return false }
         
-        if receiptURLString.contains("/StoreKit/receipt") {
-            return false // App Store
-        }
+        // App Store
+        if receiptURLString.contains("StoreKit/receipt") { return false }
         
-        return true // その他（開発時など）
+        // Xcodeから直接インストール（レシートなし or 上記以外）
+        return true
     }
     
     // バナー広告ユニットID
