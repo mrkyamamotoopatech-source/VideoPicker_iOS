@@ -131,13 +131,18 @@ final class VideoScoringViewModel: ObservableObject {
 
     func startScoring() {
         guard scoringTask == nil, scoredFrames.isEmpty else { return }
-        scoringTask = Task { [weak self] in
+        
+        // Detached Taskで採点処理を実行（ViewControllerのライフサイクルに依存しない）
+        scoringTask = Task.detached { [weak self] in
             guard let self else { return }
             await self.performScoring()
         }
+        
+        NSLog("📊 [採点開始] バックグラウンドタスクで採点処理を開始しました")
     }
 
     func cancelScoring() {
+        NSLog("📊 [採点キャンセル] 採点処理をキャンセルします")
         scoringTask?.cancel()
         scoringTask = nil
 #if canImport(VideoPickerScoring)
@@ -153,13 +158,22 @@ final class VideoScoringViewModel: ObservableObject {
             scoringTask = nil
             return
         }
-        isScoring = true
+        
+        NSLog("📊 [採点処理開始] パフォーマンス採点を開始")
+        
+        await MainActor.run {
+            isScoring = true
+        }
+        
         defer {
-            isScoring = false
-            scoringTask = nil
-            // 採点完了時に進捗を100%に
-            currentProgress = 1.0
-            currentTime = totalDuration
+            Task { @MainActor in
+                isScoring = false
+                scoringTask = nil
+                // 採点完了時に進捗を100%に
+                currentProgress = 1.0
+                currentTime = totalDuration
+                NSLog("📊 [採点完了] 採点処理が完了しました")
+            }
         }
 
         let avAsset = await assetLoader.loadAVAsset(for: asset)
