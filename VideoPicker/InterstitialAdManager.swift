@@ -7,6 +7,7 @@
 
 import UIKit
 import GoogleMobileAds
+import Foundation
 
 @MainActor
 class InterstitialAdManager: NSObject, ObservableObject {
@@ -57,6 +58,14 @@ class InterstitialAdManager: NSObject, ObservableObject {
     ///   - viewController: 表示元のViewController（SwiftUIから呼ぶ場合はUIWindow.rootViewController）
     ///   - completion: 広告が閉じられた後のコールバック
     func showInterstitialAd(from viewController: UIViewController?, completion: @escaping () -> Void) {
+        // 広告非表示モードの確認
+        let isAdFree = UserDefaults.standard.bool(forKey: "isAdFree")
+        if isAdFree {
+            NSLog("広告非表示モードが有効なため、広告をスキップしました")
+            completion()
+            return
+        }
+        
         guard let viewController = viewController else {
             NSLog("ViewControllerが取得できませんでした")
             completion()

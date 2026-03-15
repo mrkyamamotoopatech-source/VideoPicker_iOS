@@ -16,7 +16,7 @@ struct AdMobConfig {
         #if DEBUG
         return "ca-app-pub-3940256099942544/2934735716" // テスト用ID
         #else
-        return "ca-app-pub-5859864934932113/BANNER_UNIT_ID" // 本番用（要設定）
+        return "ca-app-pub-5859864934932113/4765758706" // 本番用
         #endif
     }
     

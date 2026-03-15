@@ -10,6 +10,7 @@ import Photos
 struct ContentView: View {
     @StateObject private var vm = VideoLibraryViewModel()
     @StateObject private var adManager = InterstitialAdManager.shared
+    @AppStorage("isAdFree") private var isAdFree = false
     @State private var navigationPath = NavigationPath()
     @State private var pendingItem: VideoItem?
     @State private var showsSelectionDialog = false
@@ -55,7 +56,7 @@ struct ContentView: View {
                                         }
                                     }
                                     .padding(12)
-                                    .padding(.bottom, 90) // バナー広告の最大高さ分の余白を追加
+                                    .padding(.bottom, isAdFree ? 20 : 90) // 広告非表示時は20px、表示時は90px
                                 }
                             }
                         }
@@ -94,16 +95,17 @@ struct ContentView: View {
                             }
                         }
                         .padding(.trailing, 20)
-                        .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
+                        .padding(.bottom, isAdFree ? 40 : 110) // 広告非表示時は40px、表示時は110px
                     }
                     
                     // ====== 下部バナー広告 ======
-                    // 注意: 本番リリース前に実際のAd Unit IDに変更してください
-                    AdMobAnchoredAdaptiveBannerView(adUnitID: "ca-app-pub-3940256099942544/2934735716") // テスト用ID
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 50, maxHeight: 90) // 高さを50-60pxに制限
-                        .clipped() // 制限を超える部分をクリップ
-                        .background(Color(.systemGray6))
+                    if !isAdFree {
+                        AdMobAnchoredAdaptiveBannerView(adUnitID: AdMobConfig.bannerAdUnitID)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 50, maxHeight: 90) // 高さを50-60pxに制限
+                            .clipped() // 制限を超える部分をクリップ
+                            .background(Color(.systemGray6))
+                    }
                 }
             }
             .navigationTitle(InfoPlistStrings.string("VP_Title_Main"))
