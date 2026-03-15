@@ -20,7 +20,7 @@ struct AdMobConfig {
         if receiptURLString.contains("CoreSimulator") { return true }
         
         // TestFlight
-        if receiptURLString.contains("sandboxReceipt") { return false }
+        if receiptURLString.contains("sandboxReceipt") { return true }
         
         // App Store
         if receiptURLString.contains("StoreKit/receipt") { return false }
