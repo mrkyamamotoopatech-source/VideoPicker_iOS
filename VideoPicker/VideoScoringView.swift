@@ -13,6 +13,7 @@ struct VideoScoringView: View {
 
     @StateObject private var viewModel: VideoScoringViewModel
     @State private var isPersonScoring = true
+    @State private var hasAppeared = false
 
     init(item: VideoItem) {
         self.item = item
@@ -111,13 +112,24 @@ struct VideoScoringView: View {
         .navigationTitle(InfoPlistStrings.string("VP_Title_ScoringResult"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            viewModel.startScoring()
+            // 採点がまだ開始されていない場合のみ開始
+            if !viewModel.isScoring && viewModel.scoredFrames.isEmpty {
+                viewModel.startScoring()
+            }
+        }
+        .onAppear {
+            hasAppeared = true
         }
         .onChange(of: isPersonScoring) { _, newValue in
             viewModel.rescore(for: newValue ? .person : .scenery)
         }
         .onDisappear {
-            viewModel.cancelScoring()
+            hasAppeared = false
+            // アプリがアクティブな状態での画面遷移の場合のみキャンセル
+            // （広告表示中はアプリが非アクティブになるため、その場合はキャンセルしない）
+            if UIApplication.shared.applicationState == .active {
+                viewModel.cancelScoring()
+            }
         }
         .overlay(alignment: .bottomTrailing) {
             Button {
@@ -156,6 +168,7 @@ struct FrameDetailView: View {
     @State private var originalImages: [Int: UIImage] = [:] // オリジナル画像のキャッシュ
     @State private var loadingImages: Set<Int> = [] // 読み込み中のインデックス
     @StateObject private var viewModel = FrameDetailViewModel()
+    @StateObject private var adManager = InterstitialAdManager.shared
 
     init(frames: [ScoredFrame], selectedIndex: Int, scoringViewModel: VideoScoringViewModel) {
         self.frames = frames
@@ -229,6 +242,11 @@ struct FrameDetailView: View {
                         let imageToSave = originalImages[selection] ?? frames[selection].image
                         if await viewModel.saveFrame(imageToSave) {
                             await showSaveToast()
+                            
+                            // 20%の確率で広告を表示（5回に1回）
+                            if shouldShowAd() {
+                                showInterstitialAd()
+                            }
                         }
                     }
                 } label: {
@@ -307,6 +325,20 @@ struct FrameDetailView: View {
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         await MainActor.run {
             showsSaveToast = false
+        }
+    }
+    
+    /// 広告を表示するかどうかの判定（20%の確率）
+    private func shouldShowAd() -> Bool {
+        return Int.random(in: 1...5) == 1 // 1/5の確率
+    }
+    
+    /// インタースティシャル広告を表示
+    private func showInterstitialAd() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak adManager] in
+            adManager?.showInterstitialAd(from: UIViewController.topMostViewController()) {
+                NSLog("フレーム保存後のインタースティシャル広告が閉じられました")
+            }
         }
     }
 

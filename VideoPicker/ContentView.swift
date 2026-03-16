@@ -9,15 +9,24 @@ import Photos
 
 struct ContentView: View {
     @StateObject private var vm = VideoLibraryViewModel()
+    @StateObject private var adManager = InterstitialAdManager.shared
+    @AppStorage("isAdFree") private var isAdFree = false
     @State private var navigationPath = NavigationPath()
     @State private var pendingItem: VideoItem?
     @State private var showsSelectionDialog = false
     @State private var showsSettings = false
+    @State private var pendingNavigationType: NavigationType?
 
     // グリッドの見た目
     private let columns = [
         GridItem(.adaptive(minimum: 110), spacing: 8)
     ]
+    
+    // ナビゲーションの種類
+    private enum NavigationType {
+        case detail
+        case scoring
+    }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -47,7 +56,7 @@ struct ContentView: View {
                                         }
                                     }
                                     .padding(12)
-                                    .padding(.bottom, 90) // バナー広告の最大高さ分の余白を追加
+                                    .padding(.bottom, isAdFree ? 20 : 90) // 広告非表示時は20px、表示時は90px
                                 }
                             }
                         }
@@ -86,16 +95,17 @@ struct ContentView: View {
                             }
                         }
                         .padding(.trailing, 20)
-                        .padding(.bottom, 110) // バナー最大高さ(90) + マージン(20)
+                        .padding(.bottom, isAdFree ? 40 : 110) // 広告非表示時は40px、表示時は110px
                     }
                     
                     // ====== 下部バナー広告 ======
-                    // 注意: 本番リリース前に実際のAd Unit IDに変更してください
-                    AdMobAnchoredAdaptiveBannerView(adUnitID: "ca-app-pub-3940256099942544/2934735716") // テスト用ID
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 50, maxHeight: 90) // 高さを50-60pxに制限
-                        .clipped() // 制限を超える部分をクリップ
-                        .background(Color(.systemGray6))
+                    if !isAdFree {
+                        AdMobAnchoredAdaptiveBannerView(adUnitID: AdMobConfig.bannerAdUnitID)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 50, maxHeight: 90) // 高さを50-60pxに制限
+                            .clipped() // 制限を超える部分をクリップ
+                            .background(Color(.systemGray6))
+                    }
                 }
             }
             .navigationTitle(InfoPlistStrings.string("VP_Title_Main"))
@@ -127,14 +137,12 @@ struct ContentView: View {
             }
             .alert(InfoPlistStrings.string("VP_Alert_Confirm_Title"), isPresented: $showsSelectionDialog) {
                 Button(InfoPlistStrings.string("VP_Button_No"), role: .cancel) {
-                    guard let item = pendingItem else { return }
-                    navigationPath.append(VideoRoute.detail(item))
-                    pendingItem = nil
+                    pendingNavigationType = .detail
+                    showAdAndNavigate()
                 }
                 Button(InfoPlistStrings.string("VP_Button_Yes")) {
-                    guard let item = pendingItem else { return }
-                    navigationPath.append(VideoRoute.scoring(item))
-                    pendingItem = nil
+                    pendingNavigationType = .scoring
+                    showAdAndNavigate()
                 }
             } message: {
                 Text(InfoPlistStrings.string("VP_Alert_AutoPick_Message") + "\n\n" + InfoPlistStrings.string("VP_Alert_ProcessingTime_Message"))
@@ -155,6 +163,36 @@ struct ContentView: View {
     private func openAppSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+    
+    /// 広告を表示してからナビゲーションを実行
+    private func showAdAndNavigate() {
+        guard let item = pendingItem,
+              let navType = pendingNavigationType else {
+            return
+        }
+        
+        // まず先にナビゲーションを実行
+        switch navType {
+        case .detail:
+            navigationPath.append(VideoRoute.detail(item))
+        case .scoring:
+            navigationPath.append(VideoRoute.scoring(item))
+        }
+        
+        // 採点モード以外の場合のみ広告を表示
+        if navType == .detail {
+            // ナビゲーション完了後に広告を表示
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak adManager] in
+                adManager?.showInterstitialAd(from: UIViewController.topMostViewController()) {
+                    NSLog("インタースティシャル広告が閉じられました")
+                }
+            }
+        }
+        
+        // 状態をリセット
+        pendingItem = nil
+        pendingNavigationType = nil
     }
 }
 
