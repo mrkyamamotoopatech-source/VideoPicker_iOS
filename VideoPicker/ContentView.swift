@@ -135,20 +135,19 @@ struct ContentView: View {
             } message: {
                 Text(InfoPlistStrings.string("VP_Alert_PhotosAccess_Message"))
             }
-            .alert(InfoPlistStrings.string("VP_Alert_Confirm_Title"), isPresented: $showsSelectionDialog) {
-                Button(InfoPlistStrings.string("VP_Button_No"), role: .cancel) {
-                    pendingNavigationType = .detail
-                    showAdAndNavigate()
-                }
-                Button(InfoPlistStrings.string("VP_Button_Yes")) {
-                    pendingNavigationType = .scoring
-                    showAdAndNavigate()
-                }
-            } message: {
-                Text(InfoPlistStrings.string("VP_Alert_AutoPick_Message") + "\n\n" + InfoPlistStrings.string("VP_Alert_ProcessingTime_Message"))
-            }
             .sheet(isPresented: $showsSettings) {
                 SettingsView()
+            }
+            .overlay {
+                if showsSelectionDialog, let item = pendingItem {
+                    VideoSelectionDialog(
+                        item: item,
+                        onSelection: handleVideoSelection,
+                        isPresented: $showsSelectionDialog
+                    )
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: showsSelectionDialog)
+                }
             }
             .onAppear {
                 // 起動時に許可済みなら即ロードしても良い
@@ -163,6 +162,23 @@ struct ContentView: View {
     private func openAppSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+    
+    /// ビデオ選択ダイアログの選択結果を処理
+    private func handleVideoSelection(_ choice: VideoSelectionDialog.VideoSelectionChoice) {
+        guard let item = pendingItem else { return }
+        
+        switch choice {
+        case .automatic:
+            pendingNavigationType = .scoring
+            showAdAndNavigate()
+        case .manual:
+            pendingNavigationType = .detail
+            showAdAndNavigate()
+        case .cancel:
+            pendingItem = nil
+            pendingNavigationType = nil
+        }
     }
     
     /// 広告を表示してからナビゲーションを実行

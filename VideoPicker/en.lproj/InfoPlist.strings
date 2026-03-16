@@ -12,7 +12,7 @@
 "VP_Accessibility_ScoringToggle" = "Toggle scoring mode";
 "VP_Accessibility_Stop" = "Stop";
 "VP_Alert_AutoPick_Message" = "Would you like to automatically pick the best-looking photos? (Prototype)";
-"VP_Alert_ProcessingTime_Message" = "※ Long videos and high-quality videos may take time to process";
+"VP_Alert_ProcessingTime_Message" = "※Long videos and high-quality videos may take time to process";
 "VP_ScoringQuality_Low" = "Low";
 "VP_ScoringQuality_Medium" = "Medium";
 "VP_ScoringQuality_High" = "High";
