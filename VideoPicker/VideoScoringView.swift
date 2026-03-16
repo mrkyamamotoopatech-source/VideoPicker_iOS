@@ -39,19 +39,10 @@ struct VideoScoringView: View {
                             .progressViewStyle(LinearProgressViewStyle())
                             .scaleEffect(x: 1, y: 2, anchor: .center) // 高さを2倍に
                         
-                        // 時間表示
-                        HStack {
-                            Text(viewModel.currentTime)
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                            
-                            Spacer()
-                            
-                            Text(viewModel.totalDuration)
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 4)
+                        // パーセント表示
+                        Text("\(Int(viewModel.currentProgress * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 32)
                 }
