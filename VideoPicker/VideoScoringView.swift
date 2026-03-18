@@ -306,9 +306,9 @@ struct FrameDetailView: View {
         }
     }
     
-    /// 広告を表示するかどうかの判定（20%の確率）
+    /// 広告を表示するかどうかの判定（25%の確率）
     private func shouldShowAd() -> Bool {
-        return Int.random(in: 1...5) == 1 // 1/5の確率
+        return Int.random(in: 0..<4) == 1 // 1/4の確率
     }
     
     /// インタースティシャル広告を表示
