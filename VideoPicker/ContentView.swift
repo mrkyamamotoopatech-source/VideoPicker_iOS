@@ -11,25 +11,21 @@ struct ContentView: View {
     @StateObject private var vm = VideoLibraryViewModel()
     @StateObject private var adManager = InterstitialAdManager.shared
     @AppStorage("isAdFree") private var isAdFree = false
-    @State private var navigationPath = NavigationPath()
     @State private var pendingItem: VideoItem?
     @State private var showsSelectionDialog = false
     @State private var showsSettings = false
-    @State private var pendingNavigationType: NavigationType?
+    @State private var selectedItem: VideoItem?
+    @State private var showDetailView = false
+    @State private var showScoringView = false
 
     // グリッドの見た目
     private let columns = [
         GridItem(.adaptive(minimum: 110), spacing: 8)
     ]
     
-    // ナビゲーションの種類
-    private enum NavigationType {
-        case detail
-        case scoring
-    }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+        NavigationStack {
             ZStack {
                 VStack(spacing: 0) {
                     // ====== メインコンテンツエリア ======
@@ -121,14 +117,13 @@ struct ContentView: View {
                     .accessibilityLabel(InfoPlistStrings.string("VP_Settings_Title"))
                 }
             }
-            .navigationDestination(for: VideoRoute.self) { route in
-                switch route {
-                case .detail(let item):
-                    VideoDetailView(item: item)
-                case .scoring(let item):
-                    VideoScoringView(item: item)
-                }
-            }
+            .background(
+                NavigationLink(
+                    destination: selectedItem.map { VideoDetailView(item: $0) },
+                    isActive: $showDetailView,
+                    label: { EmptyView() }
+                )
+            )
             .alert(InfoPlistStrings.string("VP_Alert_PhotosAccess_Title"), isPresented: $vm.showDeniedAlert) {
                 Button(InfoPlistStrings.string("VP_Button_OpenSettings")) { openAppSettings() }
                 Button(InfoPlistStrings.string("VP_Button_Cancel"), role: .cancel) {}
@@ -137,6 +132,11 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showsSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $showScoringView) {
+                if let item = selectedItem {
+                    VideoScoringView(item: item)
+                }
             }
             .overlay {
                 if showsSelectionDialog, let item = pendingItem {
@@ -168,51 +168,25 @@ struct ContentView: View {
     private func handleVideoSelection(_ choice: VideoSelectionDialog.VideoSelectionChoice) {
         guard let item = pendingItem else { return }
         
+        selectedItem = item
+        
         switch choice {
         case .automatic:
-            pendingNavigationType = .scoring
-            showAdAndNavigate()
+            showScoringView = true
         case .manual:
-            pendingNavigationType = .detail
-            showAdAndNavigate()
-        case .cancel:
-            pendingItem = nil
-            pendingNavigationType = nil
-        }
-    }
-    
-    /// 広告を表示してからナビゲーションを実行
-    private func showAdAndNavigate() {
-        guard let item = pendingItem,
-              let navType = pendingNavigationType else {
-            return
-        }
-        
-        // まず先にナビゲーションを実行
-        switch navType {
-        case .detail:
-            navigationPath.append(VideoRoute.detail(item))
-        case .scoring:
-            navigationPath.append(VideoRoute.scoring(item))
-        }
-        
-        // 採点モード以外の場合のみ広告を表示
-        if navType == .detail {
-            // ナビゲーション完了後に広告を表示
+            showDetailView = true
+            // 手動モードの場合のみ広告を表示
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak adManager] in
                 adManager?.showInterstitialAd(from: UIViewController.topMostViewController()) {
                     NSLog("インタースティシャル広告が閉じられました")
                 }
             }
+        case .cancel:
+            selectedItem = nil
         }
         
         // 状態をリセット
         pendingItem = nil
-        pendingNavigationType = nil
     }
 }
 
-private enum VideoRoute: Hashable {
-    case detail(VideoItem)
-    case scoring(VideoItem)
-}
