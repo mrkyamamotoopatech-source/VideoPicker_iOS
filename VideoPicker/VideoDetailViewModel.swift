@@ -99,6 +99,12 @@ final class VideoDetailViewModel: ObservableObject {
         let time = player.currentTime()
         return await saveFrame(at: time, from: avAsset)
     }
+    
+    func getCurrentFrameImage() async -> UIImage? {
+        guard let player, let avAsset, !isPlaying else { return nil }
+        let time = player.currentTime()
+        return await generateFrameImage(at: time, from: avAsset)
+    }
 
     private func configureAudioSession() async {
         do {
@@ -120,7 +126,18 @@ final class VideoDetailViewModel: ObservableObject {
 
     private func saveFrame(at time: CMTime, from asset: AVAsset) async -> Bool {
         guard await photoLibrary.requestAddOnlyAccess() else { return false }
-
+        
+        guard let image = await generateFrameImage(at: time, from: asset) else { return false }
+        
+        do {
+            try await photoLibrary.saveImage(image)
+            return true
+        } catch {
+            return false
+        }
+    }
+    
+    private func generateFrameImage(at time: CMTime, from asset: AVAsset) async -> UIImage? {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
@@ -136,11 +153,9 @@ final class VideoDetailViewModel: ObservableObject {
                     }
                 }
             }
-            let uiImage = UIImage(cgImage: cgImage)
-            try await photoLibrary.saveImage(uiImage)
-            return true
+            return UIImage(cgImage: cgImage)
         } catch {
-            return false
+            return nil
         }
     }
 }

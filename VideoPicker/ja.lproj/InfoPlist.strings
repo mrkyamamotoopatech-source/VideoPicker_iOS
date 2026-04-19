@@ -13,7 +13,7 @@
 "VP_Accessibility_ScoringToggle" = "採点モードを切り替え";
 "VP_Accessibility_Stop" = "停止";
 "VP_Alert_AutoPick_Message" = "自動で写りの良い写真をピックアップしますか？(試作)";
-"VP_Alert_ProcessingTime_Message" = "※ 長い動画や高画質動画は処理に時間がかかる場合があります";
+"VP_Alert_ProcessingTime_Message" = "※長い動画や高画質動画は処理に時間がかかる場合があります";
 "VP_ScoringQuality_Low" = "低";
 "VP_ScoringQuality_Medium" = "中";
 "VP_ScoringQuality_High" = "高";

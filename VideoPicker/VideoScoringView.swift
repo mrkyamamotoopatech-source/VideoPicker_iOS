@@ -39,19 +39,10 @@ struct VideoScoringView: View {
                             .progressViewStyle(LinearProgressViewStyle())
                             .scaleEffect(x: 1, y: 2, anchor: .center) // 高さを2倍に
                         
-                        // 時間表示
-                        HStack {
-                            Text(viewModel.currentTime)
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                            
-                            Spacer()
-                            
-                            Text(viewModel.totalDuration)
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 4)
+                        // パーセント表示
+                        Text("\(Int(viewModel.currentProgress * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 32)
                 }
@@ -183,36 +174,23 @@ struct FrameDetailView: View {
                 ForEach(frames.indices, id: \.self) { index in
                     VStack {
                         ZStack {
-                            // サムネイル画像（背景）
-                            Image(uiImage: frames[index].image)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.horizontal, 16)
-                                .opacity(originalImages[index] != nil ? 0 : 1)
-                            
-                            // オリジナル画像（メイン）
                             if let originalImage = originalImages[index] {
-                                Image(uiImage: originalImage)
-                                    .resizable()
-                                    .scaledToFit()
+                                // オリジナル画像（ズーム可能）
+                                ZoomableImageView(image: originalImage)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .padding(.horizontal, 16)
                                     .transition(.opacity)
-                            }
-                            
-                            // ローディングインジケータ
-                            if loadingImages.contains(index) {
-                                ProgressView()
-                                    .scaleEffect(1.2)
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.black.opacity(0.6))
-                                            .frame(width: 60, height: 60)
-                                    )
+                            } else {
+                                // 読み込み中表示
+                                Color(.systemGray6)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .overlay {
+                                        ProgressView()
+                                            .scaleEffect(1.2)
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .gray))
+                                    }
                             }
                         }
+                        .padding(.horizontal, 16)
 
                         Text(InfoPlistStrings.formatted("VP_Label_ScoreResult", frames[index].score))
                             .font(.footnote.weight(.semibold))
@@ -328,9 +306,9 @@ struct FrameDetailView: View {
         }
     }
     
-    /// 広告を表示するかどうかの判定（20%の確率）
+    /// 広告を表示するかどうかの判定（25%の確率）
     private func shouldShowAd() -> Bool {
-        return Int.random(in: 1...5) == 1 // 1/5の確率
+        return Int.random(in: 0..<4) == 1 // 1/4の確率
     }
     
     /// インタースティシャル広告を表示
