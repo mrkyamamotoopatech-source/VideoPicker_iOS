@@ -117,13 +117,18 @@ struct ContentView: View {
                     .accessibilityLabel(InfoPlistStrings.string("VP_Settings_Title"))
                 }
             }
-            .background(
+            .background {
                 NavigationLink(
                     destination: selectedItem.map { VideoDetailView(item: $0) },
                     isActive: $showDetailView,
                     label: { EmptyView() }
                 )
-            )
+                NavigationLink(
+                    destination: selectedItem.map { VideoScoringView(item: $0) },
+                    isActive: $showScoringView,
+                    label: { EmptyView() }
+                )
+            }
             .alert(InfoPlistStrings.string("VP_Alert_PhotosAccess_Title"), isPresented: $vm.showDeniedAlert) {
                 Button(InfoPlistStrings.string("VP_Button_OpenSettings")) { openAppSettings() }
                 Button(InfoPlistStrings.string("VP_Button_Cancel"), role: .cancel) {}
@@ -132,11 +137,6 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showsSettings) {
                 SettingsView()
-            }
-            .sheet(isPresented: $showScoringView) {
-                if let item = selectedItem {
-                    VideoScoringView(item: item)
-                }
             }
             .overlay {
                 if showsSelectionDialog, let item = pendingItem {
@@ -172,8 +172,10 @@ struct ContentView: View {
         
         switch choice {
         case .automatic:
+            // 自動選択の場合はNavigationLinkで遷移
             showScoringView = true
         case .manual:
+            // 手動選択の場合もNavigationLinkで遷移
             showDetailView = true
             // 手動モードの場合のみ広告を表示
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak adManager] in
