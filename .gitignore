@@ -38,5 +38,23 @@ ios/Frameworks/opencv2.framework/
 
 # Android/Gradle
 android/videopicker-scoring/.gradle/
+android/**/local.properties
+android/**/*.keystore
 Pods/
 VideoPicker.xcworkspace/
+
+# 署名・証明書関連（誤コミット防止）
+*.p12
+*.mobileprovision
+*.cer
+*.pem
+*.jks
+*.keystore
+
+# Firebase / 機密設定（誤コミット防止）
+GoogleService-Info.plist
+.env
+*.env.local
+
+# Claude Codeのローカル設定（実名やローカルパスを含むため非公開）
+.claude/settings.local.json
