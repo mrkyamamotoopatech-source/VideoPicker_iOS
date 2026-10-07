@@ -23,6 +23,8 @@
 "VP_Settings_Title" = "Settings";
 "VP_Settings_Version" = "Version";
 "VP_Settings_Version_Unknown" = "Unknown";
+"VP_Settings_Licenses" = "Licenses";
+"VP_Licenses_LoadFailed" = "The license text could not be loaded.";
 "VP_Settings_Footer" = "Changing scoring quality affects processing time and battery consumption.";
 "VP_Button_Done" = "Done";
 "VP_Alert_Confirm_Title" = "Confirmation";

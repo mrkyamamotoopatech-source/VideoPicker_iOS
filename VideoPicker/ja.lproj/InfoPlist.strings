@@ -24,6 +24,8 @@
 "VP_Settings_Title" = "設定";
 "VP_Settings_Version" = "バージョン";
 "VP_Settings_Version_Unknown" = "不明";
+"VP_Settings_Licenses" = "ライセンス";
+"VP_Licenses_LoadFailed" = "ライセンス文を読み込めませんでした。";
 "VP_Settings_Footer" = "採点精度を変更すると、処理時間とバッテリー消費量に影響します。";
 "VP_Button_Done" = "完了";
 "VP_Alert_Confirm_Title" = "確認";
