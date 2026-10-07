@@ -13,7 +13,10 @@ struct VideoScoringView: View {
 
     @StateObject private var viewModel: VideoScoringViewModel
     @State private var isPersonScoring = true
-    @State private var hasAppeared = false
+    @State private var showsStopScoringAlert = false
+    /// 表示中のフレーム詳細。タップ時点の一覧を固定して持つ
+    @State private var detailSnapshot: FrameDetailSnapshot?
+    @Environment(\.dismiss) private var dismiss
 
     init(item: VideoItem) {
         self.item = item
@@ -28,26 +31,7 @@ struct VideoScoringView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            if viewModel.isScoring {
-                VStack(spacing: 12) {
-                    Text(InfoPlistStrings.string("VP_Scoring_InProgress"))
-                        .font(.headline)
-                    
-                    VStack(spacing: 8) {
-                        // プログレスバー
-                        ProgressView(value: viewModel.currentProgress, total: 1.0)
-                            .progressViewStyle(LinearProgressViewStyle())
-                            .scaleEffect(x: 1, y: 2, anchor: .center) // 高さを2倍に
-                        
-                        // パーセント表示
-                        Text("\(Int(viewModel.currentProgress * 100))%")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 32)
-                }
-                .padding(.top, 24)
-            }
+            ScoringProgressBar(viewModel: viewModel, style: .regular)
 
             if viewModel.scoredFrames.isEmpty && !viewModel.isScoring {
                 Text(InfoPlistStrings.string("VP_Scoring_Empty"))
@@ -57,9 +41,13 @@ struct VideoScoringView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(Array(viewModel.scoredFrames.enumerated()), id: \.element.id) { index, frame in
-                            NavigationLink {
-                                FrameDetailView(frames: viewModel.scoredFrames, selectedIndex: index, scoringViewModel: viewModel)
+                        ForEach(viewModel.scoredFrames) { frame in
+                            Button {
+                                // 採点中は一覧が更新され続けるので、タップ時点の内容を固定して詳細画面へ渡す
+                                detailSnapshot = FrameDetailSnapshot.make(
+                                    frames: viewModel.scoredFrames,
+                                    selectedFrameID: frame.id
+                                )
                             } label: {
                                 ZStack(alignment: .bottomTrailing) {
                                     Image(uiImage: frame.image)
@@ -108,18 +96,41 @@ struct VideoScoringView: View {
                 viewModel.startScoring()
             }
         }
-        .onAppear {
-            hasAppeared = true
-        }
         .onChange(of: isPersonScoring) { _, newValue in
             viewModel.rescore(for: newValue ? .person : .scenery)
         }
-        .onDisappear {
-            hasAppeared = false
-            // アプリがアクティブな状態での画面遷移の場合のみキャンセル
-            // （広告表示中はアプリが非アクティブになるため、その場合はキャンセルしない）
-            if UIApplication.shared.applicationState == .active {
+        .navigationDestination(item: $detailSnapshot) { snapshot in
+            FrameDetailView(frames: snapshot.frames, selectedIndex: snapshot.selectedIndex, scoringViewModel: viewModel)
+        }
+        // 採点を止めるのは「完了したとき」と「戻る確認で『はい』を選んだとき」だけ。
+        // フレーム詳細への遷移など、画面が隠れただけでは止めない。
+        // 採点中は標準の戻るボタンと端スワイプを無効にし、確認を経ずに戻れないようにする
+        .navigationBarBackButtonHidden(viewModel.isScoring)
+        .toolbar {
+            if viewModel.isScoring {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showsStopScoringAlert = true
+                    } label: {
+                        Label(InfoPlistStrings.string("VP_Button_Back"), systemImage: "chevron.backward")
+                            .labelStyle(.titleAndIcon)
+                    }
+                }
+            }
+        }
+        .alert(InfoPlistStrings.string("VP_Alert_Confirm_Title"), isPresented: $showsStopScoringAlert) {
+            Button(InfoPlistStrings.string("VP_Button_Yes"), role: .destructive) {
                 viewModel.cancelScoring()
+                dismiss()
+            }
+            Button(InfoPlistStrings.string("VP_Button_No"), role: .cancel) {}
+        } message: {
+            Text(InfoPlistStrings.string("VP_Alert_StopScoring_Message"))
+        }
+        .onChange(of: viewModel.isScoring) { _, isScoring in
+            // 確認を出している間に採点が完了したら、中止の確認は意味がなくなるので閉じる
+            if !isScoring {
+                showsStopScoringAlert = false
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -204,6 +215,9 @@ struct FrameDetailView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+
+            // 詳細を見ている間も採点は続くので、進捗を出し続ける（完了すると消える）
+            ScoringProgressBar(viewModel: scoringViewModel, style: .compact)
 
             HStack {
                 Button(InfoPlistStrings.string("VP_Button_Back")) {

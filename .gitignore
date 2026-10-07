@@ -35,6 +35,8 @@ fastlane/test_output
 
 # OpenCV framework (local placement)
 ios/Frameworks/opencv2.framework/
+# scripts/fetch_opencv_headers.sh で取得する
+ios/Frameworks/opencv-headers/
 
 # Android/Gradle
 android/videopicker-scoring/.gradle/
