@@ -15,6 +15,11 @@ struct VideoPickerApp: App {
     init() {
         // Google Mobile Ads SDKを初期化
         MobileAds.shared.start(completionHandler: nil)
+
+        // 顔検出モデルの読み込みをメインスレッドで行わないよう、起動直後にバックグラウンドで済ませておく
+        Task.detached(priority: .utility) {
+            _ = PersonBlurScorer.shared
+        }
     }
     
     var body: some Scene {

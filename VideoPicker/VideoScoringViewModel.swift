@@ -94,15 +94,22 @@ final class VideoScoringViewModel: ObservableObject {
 
     private let asset: PHAsset
     private let assetLoader: VideoAssetLoader
+    /// 人物モードの顔検出（MediaPipe）。初期化に失敗した場合はnilで、従来の人物判定のみで採点する
+    private let personBlurScorer: PersonBlurScorer?
     private(set) var avAsset: AVAsset?
     private(set) var videoTransform: CGAffineTransform = .identity
     var highestScore: Int {
         scoredFrames.map(\.score).max() ?? 0
     }
 
-    init(asset: PHAsset, assetLoader: VideoAssetLoader = VideoAssetLoader()) {
+    init(
+        asset: PHAsset,
+        assetLoader: VideoAssetLoader = VideoAssetLoader(),
+        personBlurScorer: PersonBlurScorer? = PersonBlurScorer.shared
+    ) {
         self.asset = asset
         self.assetLoader = assetLoader
+        self.personBlurScorer = personBlurScorer
 #if canImport(VideoPickerScoring)
         NSLog("VideoPickerScoring canImport = true")
 #else
@@ -346,6 +353,9 @@ final class VideoScoringViewModel: ObservableObject {
             print("  間隔スキップ: \(totalFramesSkipped)フレーム (\(String(format: "%.1f", skipRate))%)")
             print("  人物なしスキップ: \(fastPersonSkipCount)フレーム (\(String(format: "%.1f", fastSkipRate))%)")
             print("  処理効率: \(String(format: "%.1f", Double(totalFramesProcessed) / processingTime))fps")
+            if scoringMode == .person {
+                logPersonDetectionSummary(context: "フレーム採点")
+            }
             
             // 最終結果の確認と補完（リアルタイム更新で既に設定されているものを保持）
             await MainActor.run {
@@ -519,14 +529,23 @@ final class VideoScoringViewModel: ObservableObject {
                 group.addTask { [weak self] in
                     guard let self = self else { return (frame: nil, isFastSkip: false) }
                     return autoreleasepool {
-                        // 早期スキップ戦略: 人物モードで人物がいない場合は50点で即リターン
-                        if currentScoringMode == .person && !self.hasPersonLikeContent(image) {
+                        // 人物モードではMediaPipeで顔を検出する（検出器が使えない場合はnil）
+                        let faceAnalysis = currentScoringMode == .person ? self.personBlurScorer?.analyze(image) : nil
+                        let hasFace = faceAnalysis?.hasFace ?? false
+
+                        // 早期スキップ戦略: 人物モードで顔も人物らしさもない場合は50点で即リターン
+                        if currentScoringMode == .person && !hasFace && !self.hasPersonLikeContent(image) {
                             let timestamp = CMTimeGetSeconds(time)
                             print("🏃‍♀️ [人物なしスキップ] \(String(format: "%.2f", timestamp))秒 → 50点")
                             return (frame: ScoredFrame(image: image, time: time, score: 50), isFastSkip: true)
                         }
                         
-                        let score = self.score(for: image, weightedScore: currentWeightedScore, mode: currentScoringMode)
+                        let score = self.score(
+                            for: image,
+                            weightedScore: currentWeightedScore,
+                            mode: currentScoringMode,
+                            faceAnalysis: faceAnalysis
+                        )
                         return (frame: ScoredFrame(image: image, time: time, score: score), isFastSkip: false)
                     }
                 }
@@ -619,7 +638,13 @@ final class VideoScoringViewModel: ObservableObject {
                 group.addTask { [weak self] in
                     guard let self = self else { return nil }
                     return autoreleasepool {
-                        let score = self.score(for: image, weightedScore: currentWeightedScore, mode: currentScoringMode)
+                        let faceAnalysis = currentScoringMode == .person ? self.personBlurScorer?.analyze(image) : nil
+                        let score = self.score(
+                            for: image,
+                            weightedScore: currentWeightedScore,
+                            mode: currentScoringMode,
+                            faceAnalysis: faceAnalysis
+                        )
                         return ScoredFrame(image: image, time: time, score: score)
                     }
                 }
@@ -682,7 +707,8 @@ final class VideoScoringViewModel: ObservableObject {
         // CGAffineTransformからUIImage.Orientationに変換
         let angle = atan2(transform.b, transform.a) * 180.0 / .pi
         
-        switch Int(angle) {
+        // 浮動小数の誤差で89.99…になると切り捨てで向きを取り違えるため、四捨五入してから判定する
+        switch Int(angle.rounded()) {
         case 90:
             return .right
         case -90, 270:
@@ -718,8 +744,9 @@ final class VideoScoringViewModel: ObservableObject {
         weightedScoreTask?.cancel()
         weightedScore = nil
         let mode = scoringMode
+        let scorer = personBlurScorer
         let task = Task.detached { [asset] in
-            await Self.computeWeightedScore(from: asset, mode: mode, quality: quality)
+            await Self.computeWeightedScore(from: asset, mode: mode, quality: quality, personBlurScorer: scorer)
         }
         weightedScoreTask = task
         Task { [weak self] in
@@ -734,14 +761,32 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 
-    private nonisolated func score(for image: UIImage, weightedScore: Int?, mode: ScoringMode) -> Int {
-        let frameScore = fallbackScore(for: image, mode: mode)
+    private func logPersonDetectionSummary(context: String) {
+        Self.logPersonDetectionSummary(personBlurScorer, context: context)
+    }
+
+    /// 動作確認用: 顔検出の利用状況を出力する。検出器が使えなかった場合もその旨を出す
+    private nonisolated static func logPersonDetectionSummary(_ scorer: PersonBlurScorer?, context: String) {
+        guard let scorer else {
+            print("⚠️ [PersonDetection] 顔検出は無効（初期化失敗）。\(context)は従来の人物判定のみで実行")
+            return
+        }
+        scorer.logSummary(context: context)
+    }
+
+    private nonisolated func score(
+        for image: UIImage,
+        weightedScore: Int?,
+        mode: ScoringMode,
+        faceAnalysis: FrameFaceAnalysis?
+    ) -> Int {
+        let frameScore = fallbackScore(for: image, mode: mode, faceAnalysis: faceAnalysis)
         guard let weightedScore else { return frameScore }
         let blended = (Double(weightedScore) * 0.7 + Double(frameScore) * 0.3).rounded()
         return min(100, max(0, Int(blended)))
     }
 
-    private nonisolated func fallbackScore(for image: UIImage, mode: ScoringMode) -> Int {
+    private nonisolated func fallbackScore(for image: UIImage, mode: ScoringMode, faceAnalysis: FrameFaceAnalysis?) -> Int {
         guard let cgImage = image.cgImage else { return 0 }
         let targetSize = 32
         let bytesPerPixel = 4
@@ -812,8 +857,11 @@ final class VideoScoringViewModel: ObservableObject {
         // ボケ検出（エッジの鮮明度）- より厳密な基準
         let sharpnessScore = min(edge / 0.25, 1.0) // より高い閾値でボケ画像を厳しく判定
         
-        // 人物検出のヒューリスティック（改良版）
-        let centerPersonScore = calculatePersonHeuristic(luminance: luminance, targetSize: targetSize)
+        // 人物スコア: 顔検出の結果があれば顔の鮮明さを優先し、なければ従来のヒューリスティックを使う
+        let heuristicPersonScore = calculatePersonHeuristic(luminance: luminance, targetSize: targetSize)
+        let centerPersonScore = faceAnalysis.map { analysis in
+            PersonScoring.presenceScore(faceSharpness: analysis.faceSharpness, heuristicScore: heuristicPersonScore)
+        } ?? heuristicPersonScore
         
         let quality: Double
         switch mode {
@@ -987,11 +1035,19 @@ final class VideoScoringViewModel: ObservableObject {
     }
 
 #if canImport(VideoPickerScoring)
-    private nonisolated static func computeWeightedScore(from asset: AVAsset, mode: ScoringMode, quality: ScoringQuality) async -> Int? {
+    private nonisolated static func computeWeightedScore(
+        from asset: AVAsset,
+        mode: ScoringMode,
+        quality: ScoringQuality,
+        personBlurScorer: PersonBlurScorer?
+    ) async -> Int? {
         if Task.isCancelled { return nil }
         guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
             return nil
         }
+        // 縦向き動画はフレームの画素データが横倒しのままなので、顔検出に表示時の向きを渡す
+        let preferredTransform = (try? await track.load(.preferredTransform)) ?? .identity
+        let frameOrientation = imageOrientation(from: preferredTransform)
         do {
             let reader = try AVAssetReader(asset: asset)
             let maxDimension = quality.imageSize
@@ -1010,7 +1066,7 @@ final class VideoScoringViewModel: ObservableObject {
             var config = VideoPickerScoring.defaultConfig()
             config.log_frame_details = 1
             let scorer = try VideoPickerScoring(config: config)
-            print("📊 [VideoScoring] OpenCVによる動画採点を開始: モード=\(mode == .person ? "人物検出" : "風景")")
+            print("📊 [VideoScoring] 動画採点を開始: モード=\(mode == .person ? "人物検出" : "風景")")
 
             let chunkSize = 12
             var frames: [FrameInput] = []
@@ -1041,11 +1097,14 @@ final class VideoScoringViewModel: ObservableObject {
                 let result: VideoQualityAggregate
                 switch mode {
                 case .person:
+                    // 顔検出が使える場合は顔領域の鮮明さ、使えない場合は従来の輝度ベースの値を渡す
                     let personBlurScores = frames.map { frame in
-                        Self.heuristicPersonBlurScore(from: frame.pixelBuffer)
+                        personBlurScorer?.personBlurRawScore(for: frame.pixelBuffer, orientation: frameOrientation)
+                            ?? Self.heuristicPersonBlurScore(from: frame.pixelBuffer)
                     }
                     NSLog(
-                        "VideoPickerScoring person mode: using heuristic person-blur scores. count=%d",
+                        "VideoPickerScoring person mode: person-blur source=%@ count=%d",
+                        personBlurScorer == nil ? "heuristic" : "face-detection",
                         personBlurScores.count
                     )
                     result = try scorer.analyze(frames: frames, personBlurScores: personBlurScores)
@@ -1105,10 +1164,11 @@ final class VideoScoringViewModel: ObservableObject {
             NSLog("VideoPickerScoring analyze succeeded: meanCount=%d", meanItems.count)
             let score = Self.weightedScore(from: meanItems, mode: mode)
             
-            // OpenCV使用状況の最終ログ
-            let hasPersonBlur = meanItems.contains { $0.id == "person_blur" }
             print("✅ [動画採点完了] モード: \(mode == .person ? "人物検出" : "風景"), 総フレーム数: \(totalFrames)")
-            print("🔍 [OpenCV状況] person_blur指標: \(hasPersonBlur ? "有効" : "無効") - OpenCV\(hasPersonBlur ? "使用中" : "未使用")")
+            // MediaPipe / OpenCVが実際に呼ばれた回数を出す（風景モードでは顔検出を行わない）
+            if mode == .person {
+                logPersonDetectionSummary(personBlurScorer, context: "動画全体の採点")
+            }
             print("🏆 [最終スコア] 加重スコア: \(score ?? 0)")
             
             Self.logScoringDetails(items: meanItems, weightedScore: score, mode: mode)

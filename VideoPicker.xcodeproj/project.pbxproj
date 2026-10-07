@@ -8,7 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		1030234E2F5314DB00C17E4A /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 1030234D2F5314DB00C17E4A /* GoogleMobileAds */; };
-		10AEE5512F28E2DE00A720CE /* opencv2.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10AEE54F2F28E2CF00A720CE /* opencv2.framework */; };
+		9618A7F9F22641EEEB052FA2 /* Pods_VideoPicker.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B6FB15C7620A1B8896E3A5B0 /* Pods_VideoPicker.framework */; };
+		9F8CB39122E59511BA607130 /* Pods_VideoPickerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E3FAFD3EF0882D36B0A17AD /* Pods_VideoPickerTests.framework */; };
 		D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */ = {isa = PBXBuildFile; productRef = D0C8A5D02F7A123400000003 /* VideoPickerScoring */; };
 /* End PBXBuildFile section */
 
@@ -30,10 +31,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0E3FAFD3EF0882D36B0A17AD /* Pods_VideoPickerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_VideoPickerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735AEC2F1F5135007678C7 /* VideoPicker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VideoPicker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735AF92F1F5137007678C7 /* VideoPickerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoPickerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10735B032F1F5137007678C7 /* VideoPickerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoPickerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		10AEE54F2F28E2CF00A720CE /* opencv2.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = opencv2.framework; path = ios/Frameworks/opencv2.framework; sourceTree = "<group>"; };
+		63872AA200B18556F99D0AF7 /* Pods-VideoPickerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VideoPickerTests.release.xcconfig"; path = "Target Support Files/Pods-VideoPickerTests/Pods-VideoPickerTests.release.xcconfig"; sourceTree = "<group>"; };
+		7CC41ADC8B9247AB71E9F299 /* Pods-VideoPicker.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VideoPicker.debug.xcconfig"; path = "Target Support Files/Pods-VideoPicker/Pods-VideoPicker.debug.xcconfig"; sourceTree = "<group>"; };
+		9AA0567583468D2CB69A59C9 /* Pods-VideoPickerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VideoPickerTests.debug.xcconfig"; path = "Target Support Files/Pods-VideoPickerTests/Pods-VideoPickerTests.debug.xcconfig"; sourceTree = "<group>"; };
+		B6FB15C7620A1B8896E3A5B0 /* Pods_VideoPicker.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_VideoPicker.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7A9A07BEDD2749B9AD952EE /* Pods-VideoPicker.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VideoPicker.release.xcconfig"; path = "Target Support Files/Pods-VideoPicker/Pods-VideoPicker.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -73,8 +79,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1030234E2F5314DB00C17E4A /* GoogleMobileAds in Frameworks */,
-				10AEE5512F28E2DE00A720CE /* opencv2.framework in Frameworks */,
 				D0C8A5D02F7A123400000001 /* VideoPickerScoring in Frameworks */,
+				9618A7F9F22641EEEB052FA2 /* Pods_VideoPicker.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9F8CB39122E59511BA607130 /* Pods_VideoPickerTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,6 +110,7 @@
 				10735B062F1F5137007678C7 /* VideoPickerUITests */,
 				10AEE54E2F28E2CF00A720CE /* Frameworks */,
 				10735AED2F1F5135007678C7 /* Products */,
+				8F386B175FA74523CB9EAA96 /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -119,9 +127,21 @@
 		10AEE54E2F28E2CF00A720CE /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				10AEE54F2F28E2CF00A720CE /* opencv2.framework */,
+				B6FB15C7620A1B8896E3A5B0 /* Pods_VideoPicker.framework */,
+				0E3FAFD3EF0882D36B0A17AD /* Pods_VideoPickerTests.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		8F386B175FA74523CB9EAA96 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				7CC41ADC8B9247AB71E9F299 /* Pods-VideoPicker.debug.xcconfig */,
+				C7A9A07BEDD2749B9AD952EE /* Pods-VideoPicker.release.xcconfig */,
+				9AA0567583468D2CB69A59C9 /* Pods-VideoPickerTests.debug.xcconfig */,
+				63872AA200B18556F99D0AF7 /* Pods-VideoPickerTests.release.xcconfig */,
+			);
+			path = Pods;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -131,6 +151,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 10735B0D2F1F5137007678C7 /* Build configuration list for PBXNativeTarget "VideoPicker" */;
 			buildPhases = (
+				2614F8D80C5BDDF48DC93D19 /* [CP] Check Pods Manifest.lock */,
 				10735AE82F1F5135007678C7 /* Sources */,
 				10735AE92F1F5135007678C7 /* Frameworks */,
 				10735AEA2F1F5135007678C7 /* Resources */,
@@ -155,6 +176,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 10735B102F1F5137007678C7 /* Build configuration list for PBXNativeTarget "VideoPickerTests" */;
 			buildPhases = (
+				3E4D056CE24F730BE0D4DE61 /* [CP] Check Pods Manifest.lock */,
 				10735AF52F1F5137007678C7 /* Sources */,
 				10735AF62F1F5137007678C7 /* Frameworks */,
 				10735AF72F1F5137007678C7 /* Resources */,
@@ -168,8 +190,6 @@
 				10735AFC2F1F5137007678C7 /* VideoPickerTests */,
 			);
 			name = VideoPickerTests;
-			packageProductDependencies = (
-			);
 			productName = VideoPickerTests;
 			productReference = 10735AF92F1F5137007678C7 /* VideoPickerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -191,8 +211,6 @@
 				10735B062F1F5137007678C7 /* VideoPickerUITests */,
 			);
 			name = VideoPickerUITests;
-			packageProductDependencies = (
-			);
 			productName = VideoPickerUITests;
 			productReference = 10735B032F1F5137007678C7 /* VideoPickerUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -269,6 +287,53 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		2614F8D80C5BDDF48DC93D19 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-VideoPicker-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		3E4D056CE24F730BE0D4DE61 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-VideoPickerTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		10735AE82F1F5135007678C7 /* Sources */ = {
@@ -433,6 +498,7 @@
 		};
 		10735B0E2F1F5137007678C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7CC41ADC8B9247AB71E9F299 /* Pods-VideoPicker.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -440,12 +506,13 @@
 				CURRENT_PROJECT_VERSION = 2026042001;
 				DEVELOPMENT_TEAM = 2RK23VMLTQ;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/ios/Frameworks",
-				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VideoPicker/Info.plist;
+				SWIFT_OBJC_BRIDGING_HEADER = "VideoPicker/VideoPicker-Bridging-Header.h";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ios/Frameworks/opencv-headers",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "V-Snap";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -458,7 +525,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.7;
-				OTHER_LDFLAGS = "-lc++";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lc++",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = opatech.VideoPicker;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -473,6 +543,7 @@
 		};
 		10735B0F2F1F5137007678C7 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C7A9A07BEDD2749B9AD952EE /* Pods-VideoPicker.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -480,12 +551,13 @@
 				CURRENT_PROJECT_VERSION = 2026042001;
 				DEVELOPMENT_TEAM = 2RK23VMLTQ;
 				ENABLE_PREVIEWS = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/ios/Frameworks",
-				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VideoPicker/Info.plist;
+				SWIFT_OBJC_BRIDGING_HEADER = "VideoPicker/VideoPicker-Bridging-Header.h";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/ios/Frameworks/opencv-headers",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "V-Snap";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -498,7 +570,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.7;
-				OTHER_LDFLAGS = "-lc++";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lc++",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = opatech.VideoPicker;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -513,6 +588,7 @@
 		};
 		10735B112F1F5137007678C7 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9AA0567583468D2CB69A59C9 /* Pods-VideoPickerTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -532,6 +608,7 @@
 		};
 		10735B122F1F5137007678C7 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 63872AA200B18556F99D0AF7 /* Pods-VideoPickerTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;

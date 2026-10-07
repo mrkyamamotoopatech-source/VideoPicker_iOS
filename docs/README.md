@@ -106,20 +106,32 @@ xcodebuild -create-xcframework \
 
 - `samples/ios/VideoPickerScoringSample.swift` に最小 View を用意。
 
-### 13. opencv2.framework の配置と設定
+### 13. 人物モードの顔検出（MediaPipe / OpenCV）のセットアップ
 
-- `opencv2.framework` を Xcode プロジェクトの `VideoPicker` ターゲットに追加する。
-  - 配置先はリポジトリ内であれば `ios/Frameworks/opencv2.framework` など任意だが、
-    以後は同じパスで参照できるように保つ。
-  - Xcode の「Build Phases」→「Link Binary With Libraries」に `opencv2.framework` を追加する。
-  - Xcode の「Build Phases」→「Embed Frameworks」に `opencv2.framework` を追加し、
-    「Embed & Sign」を指定する。
-- Xcode の「Build Settings」で以下を確認する。
-  - `FRAMEWORK_SEARCH_PATHS` に `opencv2.framework` を置いたディレクトリを追加する
-    （例: `$(PROJECT_DIR)/ios/Frameworks`）。
-  - 既存の `OTHER_LDFLAGS` があれば `-lc++` が含まれていることを確認する。
-  - `Enable Bitcode` は `NO`（OpenCV の配布バイナリに合わせる）。
-- `opencv2.framework` を差し替える場合は、同じパスへ上書きし Xcode の参照が切れないようにする。
+人物モードは MediaPipe Face Detector で顔を検出し、顔領域の鮮明さを OpenCV（`cv::Laplacian`）で評価する。
+クローン後に以下を実行する。
+
+- MediaPipe（CocoaPods）
+  - リポジトリ直下で `pod install` を実行し、以後は `VideoPicker.xcworkspace` を開く
+    （`VideoPicker.xcodeproj` を直接開くとリンクに失敗する）。
+  - モデル `VideoPicker/PersonDetection/blaze_face_short_range.tflite` はリポジトリに含まれている。
+- OpenCV（ヘッダのみ取得）
+  - OpenCV の実体は MediaPipe（MediaPipeTasksCommon）に同梱されている 4.5.3 をそのまま使う。
+    別の OpenCV をリンクしても同名のシンボルが衝突して MediaPipe 側が優先されるため、
+    ライブラリは追加しない。
+  - `scripts/fetch_opencv_headers.sh` を実行すると、同じバージョンのヘッダ（core / imgproc）が
+    `ios/Frameworks/opencv-headers/` に配置される。
+  - 旧来の `ios/Frameworks/opencv2.framework` は現在は参照していない。
+- MediaPipe を更新するとき
+  - 同梱されている OpenCV のバージョンが変わる可能性がある。単体テスト
+    `openCVHeadersMatchTheLibraryBundledWithMediaPipe` が失敗したら、`scripts/fetch_opencv_headers.sh` の
+    `OPENCV_VERSION` と `OPENCV_COMMIT` を実行時のバージョンに合わせて取得し直す。
+  - `Podfile` の `post_install` はテストターゲットから MediaPipe のリンク設定を外している。
+    更新後にテストが起動時にクラッシュする場合は、この処理が効いているかを確認する。
+- OpenCV を呼び出す Objective-C++ コードは `VideoPicker/PersonDetection/VPOpenCVLaplacian.mm` にあり、
+  `VideoPicker/VideoPicker-Bridging-Header.h` 経由で Swift に公開している。
+- 動作確認用のログは Xcode のコンソールを `PersonDetection` で絞り込むと確認できる
+  （使用エンジン、検出回数、顔の鮮明さの分布）。
 
 ## D) Android (Kotlin/JNI)
 
