@@ -131,6 +131,13 @@ struct SettingsView: View {
                         Text(appVersion)
                             .foregroundColor(.secondary)
                     }
+
+                    // オープンソースライセンス（Apache License 2.0は配布時にライセンス文の添付が必要）
+                    NavigationLink {
+                        LicensesView()
+                    } label: {
+                        Label(InfoPlistStrings.string("VP_Settings_Licenses"), systemImage: "doc.text")
+                    }
                 }
             }
             .navigationTitle(InfoPlistStrings.string("VP_Settings_Title"))
