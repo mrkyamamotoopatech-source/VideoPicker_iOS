@@ -503,16 +503,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2026042001;
+				CURRENT_PROJECT_VERSION = 2026100701;
 				DEVELOPMENT_TEAM = 2RK23VMLTQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = VideoPicker/Info.plist;
-				SWIFT_OBJC_BRIDGING_HEADER = "VideoPicker/VideoPicker-Bridging-Header.h";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ios/Frameworks/opencv-headers",
 				);
+				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "V-Snap";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -524,7 +523,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.8;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lc++",
@@ -536,6 +535,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "VideoPicker/VideoPicker-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -548,16 +548,15 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2026042001;
+				CURRENT_PROJECT_VERSION = 2026100701;
 				DEVELOPMENT_TEAM = 2RK23VMLTQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = VideoPicker/Info.plist;
-				SWIFT_OBJC_BRIDGING_HEADER = "VideoPicker/VideoPicker-Bridging-Header.h";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/ios/Frameworks/opencv-headers",
 				);
+				INFOPLIST_FILE = VideoPicker/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "V-Snap";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "動画を一覧表示するために写真ライブラリへアクセスします。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -569,7 +568,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.8;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lc++",
@@ -581,6 +580,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "VideoPicker/VideoPicker-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
