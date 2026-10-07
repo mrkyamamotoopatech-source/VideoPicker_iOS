@@ -27,6 +27,7 @@
 "VP_Settings_Footer" = "採点精度を変更すると、処理時間とバッテリー消費量に影響します。";
 "VP_Button_Done" = "完了";
 "VP_Alert_Confirm_Title" = "確認";
+"VP_Alert_StopScoring_Message" = "採点を中止して戻りますか？";
 "VP_Alert_PhotosAccess_Message" = "動画一覧を表示するには写真ライブラリへのアクセスを許可してください。";
 "VP_Alert_PhotosAccess_Title" = "写真へのアクセスが必要です";
 "VP_Button_Back" = "戻る";

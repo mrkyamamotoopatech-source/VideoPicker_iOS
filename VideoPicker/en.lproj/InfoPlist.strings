@@ -26,6 +26,7 @@
 "VP_Settings_Footer" = "Changing scoring quality affects processing time and battery consumption.";
 "VP_Button_Done" = "Done";
 "VP_Alert_Confirm_Title" = "Confirmation";
+"VP_Alert_StopScoring_Message" = "Stop scoring and go back?";
 "VP_Alert_PhotosAccess_Message" = "Allow photo library access to view your videos.";
 "VP_Alert_PhotosAccess_Title" = "Photo access required";
 "VP_Button_Back" = "Back";

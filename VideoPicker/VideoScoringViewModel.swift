@@ -87,6 +87,8 @@ final class VideoScoringViewModel: ObservableObject {
     private(set) var scoringMode: ScoringMode = .person
     private(set) var scoringQuality: ScoringQuality = .medium
     private var scoringTask: Task<Void, Never>?
+    /// 採点の実行ごとの通し番号。古いタスクの終了処理を見分けるために使う
+    private var runTracker = ScoringRunTracker()
     private var weightedScore: Int?
 #if canImport(VideoPickerScoring)
     private var weightedScoreTask: Task<Int?, Never>?
@@ -138,11 +140,16 @@ final class VideoScoringViewModel: ObservableObject {
 
     func startScoring() {
         guard scoringTask == nil, scoredFrames.isEmpty else { return }
-        
+
+        // 開始と同時に採点中にする。タスクが動き出すまでの間に、確認なしで戻れてしまうのを防ぐ
+        runTracker = runTracker.advanced()
+        let runID = runTracker.latestRunID
+        isScoring = true
+
         // Detached Taskで採点処理を実行（ViewControllerのライフサイクルに依存しない）
         scoringTask = Task.detached { [weak self] in
             guard let self else { return }
-            await self.performScoring()
+            await self.performScoring(runID: runID)
         }
         
         NSLog("📊 [採点開始] バックグラウンドタスクで採点処理を開始しました")
@@ -150,6 +157,8 @@ final class VideoScoringViewModel: ObservableObject {
 
     func cancelScoring() {
         NSLog("📊 [採点キャンセル] 採点処理をキャンセルします")
+        // 中止したタスクが後から実行する終了処理を無効にする
+        runTracker = runTracker.advanced()
         scoringTask?.cancel()
         scoringTask = nil
 #if canImport(VideoPickerScoring)
@@ -160,26 +169,29 @@ final class VideoScoringViewModel: ObservableObject {
         isScoring = false
     }
 
-    private func performScoring() async {
-        guard !isScoring, scoredFrames.isEmpty else {
-            scoringTask = nil
+    /// 採点タスクの終了処理。中止やモード切り替えで置き換えられた古いタスクからの呼び出しは無視する
+    /// （無視しないと、やり直した新しい採点の「採点中」を古いタスクが取り消してしまう）
+    private func finishScoring(runID: Int) {
+        guard runTracker.isLatest(runID) else { return }
+        isScoring = false
+        scoringTask = nil
+        // 採点完了時に進捗を100%に
+        currentProgress = 1.0
+        currentTime = totalDuration
+        NSLog("📊 [採点完了] 採点処理が完了しました")
+    }
+
+    private func performScoring(runID: Int) async {
+        guard scoredFrames.isEmpty else {
+            finishScoring(runID: runID)
             return
         }
-        
+
         NSLog("📊 [採点処理開始] パフォーマンス採点を開始")
-        
-        await MainActor.run {
-            isScoring = true
-        }
-        
+
         defer {
             Task { @MainActor in
-                isScoring = false
-                scoringTask = nil
-                // 採点完了時に進捗を100%に
-                currentProgress = 1.0
-                currentTime = totalDuration
-                NSLog("📊 [採点完了] 採点処理が完了しました")
+                finishScoring(runID: runID)
             }
         }
 
